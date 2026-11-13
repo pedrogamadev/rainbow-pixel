@@ -1,0 +1,72 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    name: Lint, typecheck, testes, migration e build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: rainbow_pixel_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d rainbow_pixel_ci"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+
+    env:
+      # Banco descartável deste workflow. Não é segredo e não existe fora daqui.
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/rainbow_pixel_ci
+      DIRECT_URL: postgresql://postgres:postgres@localhost:5432/rainbow_pixel_ci
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      # A versão do pnpm vem do campo packageManager do package.json.
+      - name: Setup do pnpm
+        uses: pnpm/action-setup@v6
+
+      - name: Setup do Node 24
+        uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - name: Instalar dependências
+        run: pnpm install --frozen-lockfile
+
+      - name: Lint
+        run: pnpm lint
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+      - name: Testes
+        run: pnpm test
+
+      # Obrigatório: aplica as migrations versionadas no PostgreSQL 16 do workflow.
+      # Não pode ser pulado nem ficar condicional; se a migration falhar, o pipeline falha.
+      - name: Migrations (prisma migrate deploy)
+        run: pnpm db:deploy
+
+      - name: Build
+        run: pnpm build
