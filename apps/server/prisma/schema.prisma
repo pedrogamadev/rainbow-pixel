@@ -1,0 +1,110 @@
+// Modelos da seção 11 do escopo da 1.0.
+// O banco guarda apenas ids dos catálogos de packages/shared/src/catalog.
+
+generator client {
+  provider            = "prisma-client"
+  output              = "../src/generated/prisma"
+  moduleFormat        = "esm"
+  importFileExtension = "js"
+}
+
+// As URLs de conexão ficam fora do schema:
+// - migrations e CLI usam DIRECT_URL (prisma.config.ts);
+// - o servidor usa DATABASE_URL, a URL do pooler (src/db/client.ts).
+datasource db {
+  provider = "postgresql"
+}
+
+enum Side {
+  ATTACK
+  DEFENSE
+}
+
+enum RoundEndReason {
+  ELIMINATION
+  BOMB_DETONATED
+  BOMB_DEFUSED
+  TIME_EXPIRED
+}
+
+model Profile {
+  /// Mesmo id do usuário no Supabase Auth.
+  id            String        @id @db.Uuid
+  nickname      String        @unique @db.VarChar(16)
+  /// Nickname em minúsculas: garante unicidade sem diferenciar maiúsculas.
+  nicknameLower String        @unique @db.VarChar(16)
+  level         Int           @default(1)
+  xp            Int           @default(0)
+  createdAt     DateTime      @default(now())
+  stats         PlayerStats?
+  loadouts      Loadout[]
+  matches       MatchPlayer[]
+}
+
+model PlayerStats {
+  profileId    String  @id @db.Uuid
+  profile      Profile @relation(fields: [profileId], references: [id])
+  kills        Int     @default(0)
+  deaths       Int     @default(0)
+  wins         Int     @default(0)
+  losses       Int     @default(0)
+  roundsPlayed Int     @default(0)
+  roundsWon    Int     @default(0)
+  shotsFired   Int     @default(0)
+  shotsHit     Int     @default(0)
+  plants       Int     @default(0)
+  defuses      Int     @default(0)
+}
+
+model Loadout {
+  id          String  @id @default(uuid()) @db.Uuid
+  profileId   String  @db.Uuid
+  profile     Profile @relation(fields: [profileId], references: [id])
+  operatorId  String  @default("recruit")
+  side        Side
+  primaryId   String
+  secondaryId String
+
+  @@unique([profileId, operatorId, side])
+}
+
+model Match {
+  id         String        @id @default(uuid()) @db.Uuid
+  modeId     String
+  mapId      String
+  startedAt  DateTime
+  endedAt    DateTime
+  scoreTeamA Int
+  scoreTeamB Int
+  winnerTeam Int?
+  botCount   Int           @default(0)
+  players    MatchPlayer[]
+  rounds     MatchRound[]
+}
+
+model MatchPlayer {
+  matchId   String  @db.Uuid
+  profileId String  @db.Uuid
+  match     Match   @relation(fields: [matchId], references: [id])
+  profile   Profile @relation(fields: [profileId], references: [id])
+  team      Int
+  startSide Side
+  kills     Int
+  deaths    Int
+  xpGained  Int
+  abandoned Boolean @default(false)
+
+  @@id([matchId, profileId])
+}
+
+model MatchRound {
+  matchId    String         @db.Uuid
+  match      Match          @relation(fields: [matchId], references: [id])
+  number     Int
+  attackTeam Int
+  winnerTeam Int
+  reason     RoundEndReason
+  durationMs Int
+
+  @@id([matchId, number])
+}
