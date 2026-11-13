@@ -1,0 +1,30 @@
+{
+  "name": "rainbow-pixel",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Jogo de tiro tático 2D online, 2v2, no navegador, com parede destrutível.",
+  "type": "module",
+  "packageManager": "pnpm@10.26.1",
+  "scripts": {
+    "dev": "pnpm --parallel --filter \"./apps/*\" dev",
+    "build": "pnpm -r build",
+    "lint": "eslint . && prettier --check .",
+    "format": "prettier --write .",
+    "typecheck": "pnpm -r typecheck",
+    "test": "pnpm -r test",
+    "db:migrate": "pnpm --filter @rainbow-pixel/server db:migrate",
+    "db:deploy": "pnpm --filter @rainbow-pixel/server db:deploy",
+    "db:studio": "pnpm --filter @rainbow-pixel/server db:studio",
+    "dev:seed-users": "pnpm --filter @rainbow-pixel/server dev:seed-users"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "eslint": "^10.14.0",
+    "eslint-config-prettier": "^10.1.8",
+    "eslint-plugin-react-hooks": "^7.1.1",
+    "globals": "^17.14.0",
+    "prettier": "^3.10.1",
+    "typescript": "~6.0.3",
+    "typescript-eslint": "^8.72.2"
+  }
+}

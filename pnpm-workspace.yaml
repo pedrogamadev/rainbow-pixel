@@ -1,0 +1,18 @@
+packages:
+  - packages/*
+  - apps/*
+  - tools/*
+
+# Node 24 LTS: o pnpm baixa esta versão e roda todos os scripts com ela,
+# independente do Node instalado na máquina. Manter alinhado com o .nvmrc.
+useNodeVersion: 24.22.3
+
+# pnpm 10 só roda scripts de instalação de dependências listadas aqui.
+onlyBuiltDependencies:
+  - '@prisma/engines'
+  - esbuild
+  - prisma
+
+# Acelerador nativo opcional do msgpackr (Colyseus); o fallback em JS basta.
+ignoredBuiltDependencies:
+  - msgpackr-extract
