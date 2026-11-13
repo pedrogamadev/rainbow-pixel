@@ -49,6 +49,11 @@ export type AddHumanResult =
       readonly lobby: LobbyState;
       /** Bot que cedeu a vaga para o humano, se houve. */
       readonly replacedBotId: string | null;
+      /**
+       * `playerId` antigo da vaga desconectada que o humano retomou, se foi uma retomada.
+       * A reserva de reconexão dessa sessão antiga precisa ser cancelada.
+       */
+      readonly resumedPlayerId: string | null;
     }
   | LobbyFailure;
 
@@ -129,17 +134,45 @@ function replacePlayer(lobby: LobbyState, updated: LobbySlot): LobbyState {
 }
 
 /**
+ * A nova sessão assume a vaga desconectada do mesmo perfil: mesmo time, mesmo pronto, mesma
+ * posição na ordem de entrada e, se a vaga era do host, a sessão nova vira o host.
+ */
+function resumeSlot(lobby: LobbyState, slot: LobbySlot, join: HumanJoin): LobbyState {
+  const resumed: LobbySlot = {
+    ...slot,
+    playerId: join.sessionId,
+    nickname: join.nickname,
+    connected: true,
+  };
+  return {
+    ...lobby,
+    players: lobby.players.map((player) => (player.playerId === slot.playerId ? resumed : player)),
+    hostSessionId: lobby.hostSessionId === slot.playerId ? join.sessionId : lobby.hostSessionId,
+  };
+}
+
+/**
  * Coloca um humano na sala, no time com menos jogadores.
  * Com a sala cheia, o último bot adicionado sai antes de o humano receber a vaga.
+ * Se o mesmo perfil já tem uma vaga desconectada, a sessão nova assume essa vaga.
  */
 export function addHuman(lobby: LobbyState, join: HumanJoin): AddHumanResult {
-  const alreadyIn = lobby.players.some(
-    (player) =>
-      player.playerId === join.sessionId ||
-      (player.kind === 'human' && player.profileId === join.profileId),
-  );
-  if (alreadyIn) {
+  if (findPlayer(lobby, join.sessionId) !== undefined) {
     return fail('already_in_room');
+  }
+  const sameProfile = lobby.players.find(
+    (player) => player.kind === 'human' && player.profileId === join.profileId,
+  );
+  if (sameProfile !== undefined) {
+    if (sameProfile.connected) {
+      return fail('already_in_room');
+    }
+    return {
+      ok: true,
+      lobby: resumeSlot(lobby, sameProfile, join),
+      replacedBotId: null,
+      resumedPlayerId: sameProfile.playerId,
+    };
   }
 
   let players = lobby.players;
@@ -171,6 +204,7 @@ export function addHuman(lobby: LobbyState, join: HumanJoin): AddHumanResult {
       hostSessionId: lobby.hostSessionId === '' ? join.sessionId : lobby.hostSessionId,
     },
     replacedBotId,
+    resumedPlayerId: null,
   };
 }
 

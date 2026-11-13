@@ -17,7 +17,7 @@ import type {
   TeamIndex,
 } from '@rainbow-pixel/shared';
 import { Room, ServerError, matchMaker } from 'colyseus';
-import type { Client } from 'colyseus';
+import type { Client, Deferred } from 'colyseus';
 import { z } from 'zod';
 import { describeAuthFailure } from '../auth/verifyJwt.js';
 import type { VerifyJwt } from '../auth/verifyJwt.js';
@@ -143,13 +143,17 @@ function joinErrorCode(error: LobbyFailure['error']): number {
  * neste marco não existe lógica de partida.
  */
 export class QuickMatchRoom extends Room<{ state: QuickMatchRoomState; client: RoomClient }> {
-  // Limita só humanos: bot não é cliente e não ocupa conexão.
-  override maxClients = MATCH_CONFIG.maxPlayers;
+  // Conta só humanos: bot não é cliente e não ocupa conexão. Cada humano pode ter, por um
+  // instante, duas conexões: a vaga desconectada reservada para reconexão e a aba nova que vai
+  // assumi-la. Por isso o limite do Colyseus é o dobro; quem limita os humanos a 4 é lobbySlots.
+  override maxClients = MATCH_CONFIG.maxPlayers * 2;
   override state = new QuickMatchRoomState();
 
   /** Fonte da verdade do lobby. O estado sincronizado é só um espelho dela. */
   private lobby: LobbyState = createLobby();
   private readyToStart = false;
+  /** Reservas de reconexão das vagas desconectadas, por sessionId. */
+  private readonly reconnections = new Map<string, Deferred<RoomClient>>();
 
   /**
    * Roda no matchmaking, antes de a sala ser criada ou de a vaga ser reservada.
@@ -220,6 +224,11 @@ export class QuickMatchRoom extends Room<{ state: QuickMatchRoomState; client: R
       throw new ServerError(joinErrorCode(result.error), LOBBY_ERROR_MESSAGES[result.error]);
     }
     this.setLobby(result.lobby);
+    if (result.resumedPlayerId !== null) {
+      // A vaga já é da sessão nova. O Colyseus chama onLeave da sessão antiga, que não acha
+      // mais vaga com aquele id e não mexe no lobby.
+      this.cancelReconnection(result.resumedPlayerId);
+    }
   }
 
   /** Queda de conexão: a vaga fica reservada pela janela de reconexão. */
@@ -229,12 +238,30 @@ export class QuickMatchRoom extends Room<{ state: QuickMatchRoomState; client: R
       return;
     }
     this.setLobby(setConnected(this.lobby, client.sessionId, false));
-    // Se o prazo vencer, o Colyseus chama onLeave. A rejeição não precisa de tratamento aqui.
-    this.allowReconnection(client, LOBBY_CONFIG.reconnectionWindowSeconds).catch(() => {});
+    const { sessionId } = client;
+    const reconnection = this.allowReconnection(client, LOBBY_CONFIG.reconnectionWindowSeconds);
+    this.reconnections.set(sessionId, reconnection);
+    const forget = () => {
+      if (this.reconnections.get(sessionId) === reconnection) {
+        this.reconnections.delete(sessionId);
+      }
+    };
+    // Se o prazo vencer (ou a vaga for retomada por outra aba), o Colyseus chama onLeave.
+    reconnection.then(forget, forget);
   }
 
   override onReconnect(client: RoomClient): void {
     this.setLobby(setConnected(this.lobby, client.sessionId, true));
+  }
+
+  /** Desiste de esperar a reconexão de uma sessão. */
+  private cancelReconnection(sessionId: string): void {
+    const reconnection = this.reconnections.get(sessionId);
+    this.reconnections.delete(sessionId);
+    // Com a sala fechando, allowReconnection devolve uma Promise comum, sem reject.
+    if (reconnection !== undefined && typeof reconnection.reject === 'function') {
+      reconnection.reject(false);
+    }
   }
 
   /** Saída definitiva: o jogador sai da lista. Sem humano, a sala é descartada pelo autoDispose. */

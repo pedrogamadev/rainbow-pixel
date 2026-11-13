@@ -128,12 +128,12 @@ describe('addHuman', () => {
     expect(result).toEqual({ ok: false, error: 'already_in_room' });
   });
 
-  it('recusa o mesmo usuário mesmo com a vaga antiga desconectada', () => {
-    const lobby = setConnected(join(createLobby(), 'ana'), 'session-ana', false);
+  it('recusa a mesma sessão duas vezes', () => {
+    const lobby = join(createLobby(), 'ana');
     const result = addHuman(lobby, {
-      sessionId: 'session-outra-aba',
-      profileId: 'profile-ana',
-      nickname: 'ana',
+      sessionId: 'session-ana',
+      profileId: 'profile-outro',
+      nickname: 'outro',
     });
     expect(result).toEqual({ ok: false, error: 'already_in_room' });
   });
@@ -152,6 +152,96 @@ describe('addHuman', () => {
     const before = join(createLobby(), 'ana');
     const snapshot = structuredClone(before);
     join(before, 'bia');
+    expect(before).toEqual(snapshot);
+  });
+});
+
+describe('retomada de vaga desconectada', () => {
+  function otherTab(lobby: LobbyState, name: string) {
+    return addHuman(lobby, {
+      sessionId: `session-${name}-nova-aba`,
+      profileId: `profile-${name}`,
+      nickname: name,
+    });
+  }
+
+  it('a nova aba do mesmo perfil assume a vaga, com o mesmo time e o mesmo pronto', () => {
+    let lobby = join(join(createLobby(), 'ana'), 'bia');
+    lobby = ready(lobby, 'bia');
+    lobby = setConnected(lobby, 'session-bia', false);
+
+    const result = otherTab(lobby, 'bia');
+    if (!result.ok) throw new Error(result.error);
+
+    expect(result.resumedPlayerId).toBe('session-bia');
+    expect(result.replacedBotId).toBeNull();
+    expect(findPlayer(result.lobby, 'session-bia')).toBeUndefined();
+    expect(findPlayer(result.lobby, 'session-bia-nova-aba')).toMatchObject({
+      kind: 'human',
+      profileId: 'profile-bia',
+      team: 1,
+      ready: true,
+      connected: true,
+    });
+    expect(result.lobby.players).toHaveLength(2);
+  });
+
+  it('mantém a posição na ordem de entrada', () => {
+    let lobby = join(join(join(createLobby(), 'ana'), 'bia'), 'caio');
+    lobby = setConnected(lobby, 'session-bia', false);
+    const result = otherTab(lobby, 'bia');
+    if (!result.ok) throw new Error(result.error);
+    expect(result.lobby.players.map((player) => player.playerId)).toEqual([
+      'session-ana',
+      'session-bia-nova-aba',
+      'session-caio',
+    ]);
+  });
+
+  it('a vaga do host continua sendo do host', () => {
+    let lobby = join(join(createLobby(), 'ana'), 'bia');
+    lobby = setConnected(lobby, 'session-ana', false);
+    const result = otherTab(lobby, 'ana');
+    if (!result.ok) throw new Error(result.error);
+    expect(result.lobby.hostSessionId).toBe('session-ana-nova-aba');
+  });
+
+  it('não muda o host quando a vaga retomada não era do host', () => {
+    let lobby = join(join(createLobby(), 'ana'), 'bia');
+    lobby = setConnected(lobby, 'session-bia', false);
+    const result = otherTab(lobby, 'bia');
+    if (!result.ok) throw new Error(result.error);
+    expect(result.lobby.hostSessionId).toBe('session-ana');
+  });
+
+  it('em sala cheia com bots, retoma a vaga sem tirar bot', () => {
+    const lobby = setConnected(fullWithBots(), 'session-ana', false);
+    const result = otherTab(lobby, 'ana');
+    if (!result.ok) throw new Error(result.error);
+    expect(result.replacedBotId).toBeNull();
+    expect(countBots(result.lobby)).toBe(3);
+    expect(result.lobby.players).toHaveLength(4);
+  });
+
+  it('em sala cheia de humanos, retoma a vaga', () => {
+    let lobby = createLobby();
+    for (const name of ['ana', 'bia', 'caio', 'davi']) {
+      lobby = join(lobby, name);
+    }
+    lobby = setConnected(lobby, 'session-davi', false);
+    const result = otherTab(lobby, 'davi');
+    expect(result.ok).toBe(true);
+  });
+
+  it('continua recusando quando a vaga existente está conectada', () => {
+    const lobby = join(createLobby(), 'ana');
+    expect(otherTab(lobby, 'ana')).toEqual({ ok: false, error: 'already_in_room' });
+  });
+
+  it('não altera o lobby recebido', () => {
+    const before = setConnected(join(createLobby(), 'ana'), 'session-ana', false);
+    const snapshot = structuredClone(before);
+    otherTab(before, 'ana');
     expect(before).toEqual(snapshot);
   });
 });
