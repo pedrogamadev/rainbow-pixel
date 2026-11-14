@@ -67,6 +67,31 @@ describe('parseEnv', () => {
     expect(env.SUPABASE_JWT_SECRET).toBe('segredo');
   });
 
+  it('lê os valores iniciais do simulador de lag, 0 quando ausentes', () => {
+    expect(parseEnv(base)).toMatchObject({
+      DEV_NET_LATENCY_MS: 0,
+      DEV_NET_JITTER_MS: 0,
+      DEV_NET_LOSS_PCT: 0,
+    });
+    const env = parseEnv({
+      ...base,
+      DEV_NET_LATENCY_MS: '150',
+      DEV_NET_JITTER_MS: '20',
+      DEV_NET_LOSS_PCT: '2.5',
+    });
+    expect(env).toMatchObject({
+      DEV_NET_LATENCY_MS: 150,
+      DEV_NET_JITTER_MS: 20,
+      DEV_NET_LOSS_PCT: 2.5,
+    });
+  });
+
+  it('recusa valores do simulador de lag fora dos limites', () => {
+    expect(() => parseEnv({ ...base, DEV_NET_LATENCY_MS: '-1' })).toThrow(/DEV_NET_LATENCY_MS/);
+    expect(() => parseEnv({ ...base, DEV_NET_LOSS_PCT: '90' })).toThrow(/DEV_NET_LOSS_PCT/);
+    expect(() => parseEnv({ ...base, DEV_NET_JITTER_MS: 'muito' })).toThrow(/DEV_NET_JITTER_MS/);
+  });
+
   it('recusa valores fora do esperado', () => {
     expect(() => parseEnv({ ...base, AUTH_JWT_MODE: 'outro' })).toThrow(/AUTH_JWT_MODE/);
     expect(() => parseEnv({ ...base, PORT: 'abc' })).toThrow(/PORT/);

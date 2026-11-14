@@ -12,6 +12,7 @@ import type {
   BotDifficultyId,
   LobbyErrorCode,
   LobbyPlayerKind,
+  MatchPhase,
   TeamIndex,
 } from '@rainbow-pixel/shared';
 
@@ -34,6 +35,8 @@ export interface LobbyState {
   readonly players: readonly LobbySlot[];
   /** sessionId do host. Vazio enquanto não há humano. */
   readonly hostSessionId: string;
+  /** A partida acontece na mesma sala; durante ela, as vagas ficam congeladas. */
+  readonly phase: MatchPhase;
 }
 
 export interface LobbyFailure {
@@ -83,7 +86,7 @@ function fail(error: LobbyErrorCode): LobbyFailure {
 }
 
 export function createLobby(): LobbyState {
-  return { players: [], hostSessionId: '' };
+  return { players: [], hostSessionId: '', phase: 'lobby' };
 }
 
 export function findPlayer(lobby: LobbyState, playerId: string): LobbySlot | undefined {
@@ -96,6 +99,10 @@ export function countHumans(lobby: LobbyState): number {
 
 export function countBots(lobby: LobbyState): number {
   return lobby.players.filter((player) => player.kind === 'bot').length;
+}
+
+export function countConnectedHumans(lobby: LobbyState): number {
+  return lobby.players.filter((player) => player.kind === 'human' && player.connected).length;
 }
 
 /** Conta humanos e bots do time. */
@@ -155,6 +162,7 @@ function resumeSlot(lobby: LobbyState, slot: LobbySlot, join: HumanJoin): LobbyS
  * Coloca um humano na sala, no time com menos jogadores.
  * Com a sala cheia, o último bot adicionado sai antes de o humano receber a vaga.
  * Se o mesmo perfil já tem uma vaga desconectada, a sessão nova assume essa vaga.
+ * Durante a partida, só entra quem retoma a própria vaga.
  */
 export function addHuman(lobby: LobbyState, join: HumanJoin): AddHumanResult {
   if (findPlayer(lobby, join.sessionId) !== undefined) {
@@ -173,6 +181,9 @@ export function addHuman(lobby: LobbyState, join: HumanJoin): AddHumanResult {
       replacedBotId: null,
       resumedPlayerId: sameProfile.playerId,
     };
+  }
+  if (lobby.phase === 'match') {
+    return fail('match_in_progress');
   }
 
   let players = lobby.players;
@@ -200,6 +211,7 @@ export function addHuman(lobby: LobbyState, join: HumanJoin): AddHumanResult {
   return {
     ok: true,
     lobby: {
+      ...lobby,
       players: [...players, human],
       hostSessionId: lobby.hostSessionId === '' ? join.sessionId : lobby.hostSessionId,
     },
@@ -223,6 +235,7 @@ export function removePlayer(lobby: LobbyState, playerId: string): RemovePlayerR
   const hostStillHere = players.some((player) => player.playerId === lobby.hostSessionId);
   return {
     lobby: {
+      ...lobby,
       players,
       hostSessionId: hostStillHere ? lobby.hostSessionId : pickHost(players),
     },
@@ -240,10 +253,14 @@ export function setConnected(lobby: LobbyState, sessionId: string, connected: bo
   return replacePlayer(lobby, { ...player, connected });
 }
 
+/** Durante a partida, o pedido é ignorado: o lobby volta sem mudança. */
 export function toggleReady(lobby: LobbyState, sessionId: string): LobbyResult {
   const player = findPlayer(lobby, sessionId);
   if (player === undefined || player.kind !== 'human') {
     return fail('player_not_found');
+  }
+  if (lobby.phase === 'match') {
+    return { ok: true, lobby };
   }
   return { ok: true, lobby: replacePlayer(lobby, { ...player, ready: !player.ready }) };
 }
@@ -269,6 +286,9 @@ export function addBot(
 ): AddBotResult {
   if (!isHost(lobby, actorSessionId)) {
     return fail('not_host');
+  }
+  if (lobby.phase === 'match') {
+    return fail('match_in_progress');
   }
   if (countBots(lobby) >= LOBBY_CONFIG.maxBots) {
     return fail('max_bots');
@@ -308,6 +328,9 @@ export function removeBot(
   if (!isHost(lobby, actorSessionId)) {
     return fail('not_host');
   }
+  if (lobby.phase === 'match') {
+    return fail('match_in_progress');
+  }
   const bot = findPlayer(lobby, playerId);
   if (bot === undefined || bot.kind !== 'bot') {
     return fail('bot_not_found');
@@ -321,10 +344,25 @@ export function removeBot(
   };
 }
 
-/** Sala fechada em 2v2, com todos prontos e conectados. */
+/** Sala fechada em 2v2, com todos prontos e conectados, ainda no lobby. */
 export function isReadyToStart(lobby: LobbyState): boolean {
   return (
+    lobby.phase === 'lobby' &&
     lobby.players.length === MATCH_CONFIG.maxPlayers &&
     lobby.players.every((player) => player.ready && player.connected)
   );
+}
+
+/** Lobby -> partida, com quem estiver na sala. As vagas ficam como estão. */
+export function startMatch(lobby: LobbyState): LobbyState {
+  return { ...lobby, phase: 'match' };
+}
+
+/** Partida -> lobby: humanos voltam como não prontos; bot continua sempre pronto. */
+export function endMatch(lobby: LobbyState): LobbyState {
+  return {
+    ...lobby,
+    phase: 'lobby',
+    players: lobby.players.map((player) => ({ ...player, ready: player.kind === 'bot' })),
+  };
 }

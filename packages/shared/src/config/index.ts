@@ -16,6 +16,11 @@ export const MATCH_CONFIG = {
 export const SIM_CONFIG = {
   /** Ticks por segundo da simulação, no servidor e na previsão do cliente. */
   tickRate: 30,
+  /**
+   * Máximo de ticks atrasados que o servidor recupera de uma vez. Se o processo ficou parado
+   * mais que isso, o tempo excedente é pulado em vez de simulado.
+   */
+  maxCatchUpTicks: 30,
   /** Lado da célula do mapa, em px. */
   cellSize: 8,
   /** Raio do círculo do jogador, em px. */
