@@ -1,0 +1,10 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "noEmit": true,
+    // Só o script de geração usa Node. O código de src roda também no navegador, e o build
+    // (tsconfig.build.json) compila sem os tipos do Node.
+    "types": ["node"]
+  },
+  "include": ["src", "scripts"]
+}
