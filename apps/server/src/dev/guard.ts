@@ -35,12 +35,15 @@ export function assertDevToolsAllowed(env: DevToolsEnv): void {
   }
 }
 
-/** Chamado por toda ferramenta de teste antes de fazer qualquer coisa. */
-export function assertDevToolsEnabled(env: DevToolsEnv): void {
+/**
+ * Chamado por toda ferramenta de teste antes de fazer qualquer coisa.
+ * @param envFile arquivo .env da ferramenta, para a mensagem de erro
+ */
+export function assertDevToolsEnabled(env: DevToolsEnv, envFile = 'apps/server/.env'): void {
   assertDevToolsAllowed(env);
   if (!isDevToolsEnabled(env)) {
     throw new DevToolsGuardError(
-      'Esta ferramenta só roda com DEV_TOOLS=true. Defina DEV_TOOLS=true em apps/server/.env.',
+      `Esta ferramenta só roda com DEV_TOOLS=true. Defina DEV_TOOLS=true em ${envFile}.`,
     );
   }
 }

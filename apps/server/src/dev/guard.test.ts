@@ -58,6 +58,13 @@ describe('assertDevToolsEnabled', () => {
       assertDevToolsEnabled({ DEV_TOOLS: 'true', NODE_ENV: 'development' }),
     ).not.toThrow();
   });
+
+  it('aponta o .env da ferramenta na mensagem', () => {
+    expect(() => assertDevToolsEnabled({}, 'tools/headless-client/.env')).toThrow(
+      /DEV_TOOLS=true em tools\/headless-client\/\.env/,
+    );
+    expect(() => assertDevToolsEnabled({})).toThrow(/apps\/server\/\.env/);
+  });
 });
 
 describe('isDevToolsEnabled', () => {

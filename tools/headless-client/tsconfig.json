@@ -1,0 +1,10 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "types": ["node"]
+  },
+  // Também verifica o que vem de fora por import relativo: a conexão de jogo do cliente web
+  // (apps/client/src/game) e o guard das ferramentas de teste (apps/server/src/dev).
+  "include": ["src", "vitest.config.ts"]
+}
