@@ -3,10 +3,13 @@ import { BOT_DIFFICULTIES } from '../catalog/index.js';
 import { isValidNickname, nicknameKey } from '../validation/index.js';
 import {
   BOT_DIFFICULTY_PARAMS,
+  BOT_LEVEL0_CONFIG,
   DEV_SEED_USERS,
   LOBBY_CONFIG,
   MATCH_CONFIG,
+  NET_CONFIG,
   NICKNAME_CONFIG,
+  SIM_CONFIG,
 } from './index.js';
 
 describe('MATCH_CONFIG', () => {
@@ -14,6 +17,55 @@ describe('MATCH_CONFIG', () => {
     expect(MATCH_CONFIG.teamCount).toBe(2);
     expect(MATCH_CONFIG.teamSize).toBe(2);
     expect(MATCH_CONFIG.maxPlayers).toBe(MATCH_CONFIG.teamCount * MATCH_CONFIG.teamSize);
+  });
+
+  it('conta 3 segundos antes de iniciar e usa o gym_01 neste marco', () => {
+    expect(MATCH_CONFIG.startCountdownSeconds).toBe(3);
+    expect(MATCH_CONFIG.mapId).toBe('gym_01');
+  });
+});
+
+describe('SIM_CONFIG', () => {
+  it('segue o escopo: tick de 30 Hz, célula de 8 px e jogador de raio 12 px', () => {
+    expect(SIM_CONFIG.tickRate).toBe(30);
+    expect(SIM_CONFIG.cellSize).toBe(8);
+    expect(SIM_CONFIG.playerRadius).toBe(12);
+  });
+
+  it('correr é mais rápido que andar, que é mais rápido que andar lento', () => {
+    const { walk, slow, run } = SIM_CONFIG.moveSpeedPxPerSec;
+    expect(run).toBeGreaterThan(walk);
+    expect(walk).toBeGreaterThan(slow);
+  });
+});
+
+describe('NET_CONFIG', () => {
+  it('amostra um input por tick e manda snapshots a 20 Hz', () => {
+    expect(NET_CONFIG.inputRate).toBe(SIM_CONFIG.tickRate);
+    expect(NET_CONFIG.snapshotRate).toBe(20);
+    expect(NET_CONFIG.snapshotRate).toBeLessThanOrEqual(SIM_CONFIG.tickRate);
+  });
+
+  it('aceita o ritmo normal de input com folga, mas não o dobro dela', () => {
+    expect(NET_CONFIG.maxInputsPerSecond).toBe(2 * NET_CONFIG.inputRate);
+    expect(NET_CONFIG.inputQueueMax).toBeGreaterThanOrEqual(NET_CONFIG.inputRedundancy);
+  });
+
+  it('não extrapola além do atraso de interpolação', () => {
+    expect(NET_CONFIG.maxExtrapolationMs).toBeLessThanOrEqual(NET_CONFIG.interpolationDelayMs);
+    expect(NET_CONFIG.interpolationBufferMs).toBeGreaterThan(NET_CONFIG.interpolationDelayMs);
+  });
+});
+
+describe('BOT_LEVEL0_CONFIG', () => {
+  it('decide a 10 Hz, um número inteiro de ticks por decisão', () => {
+    expect(BOT_LEVEL0_CONFIG.decisionRateHz).toBe(10);
+    expect(SIM_CONFIG.tickRate % BOT_LEVEL0_CONFIG.decisionRateHz).toBe(0);
+  });
+
+  it('entre duas decisões, a fila repete o input sem o bot parar', () => {
+    const ticksPerDecision = SIM_CONFIG.tickRate / BOT_LEVEL0_CONFIG.decisionRateHz;
+    expect(ticksPerDecision - 1).toBeLessThanOrEqual(NET_CONFIG.inputRepeatTicks);
   });
 });
 

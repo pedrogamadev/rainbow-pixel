@@ -1,0 +1,80 @@
+import { describe, expect, it } from 'vitest';
+import { SIM_CONFIG } from '../config/index.js';
+import { TICK_SECONDS, stepPlayer } from './movement.js';
+import { openMap } from './testing/asciiMap.js';
+import type { MoveAxis, MoveInput, MoveMode, PlayerSimState } from './types.js';
+import { createWorld, stepWorld } from './world.js';
+
+const map = openMap(200, 200);
+const start: PlayerSimState = { playerId: 'p1', x: 800, y: 800, aimAngle: 0, moveMode: 'walk' };
+
+function move(moveX: MoveAxis, moveY: MoveAxis, moveMode: MoveMode = 'walk'): MoveInput {
+  return { moveX, moveY, aimAngle: 0, moveMode };
+}
+
+/** Aplica o mesmo input por `ticks` ticks. */
+function hold(state: PlayerSimState, input: MoveInput, ticks: number): PlayerSimState {
+  let current = state;
+  for (let tick = 0; tick < ticks; tick += 1) {
+    current = stepPlayer(map, current, input, TICK_SECONDS);
+  }
+  return current;
+}
+
+describe('stepPlayer: velocidade por modo', () => {
+  it.each([
+    ['walk', 140],
+    ['slow', 80],
+    ['run', 200],
+  ] as const)('%s anda %i px em 1 s', (mode, pxPerSecond) => {
+    const end = hold(start, move(1, 0, mode), SIM_CONFIG.tickRate);
+    expect(end.x - start.x).toBeCloseTo(pxPerSecond, 9);
+    expect(end.y).toBe(start.y);
+    expect(end.moveMode).toBe(mode);
+  });
+
+  it('usa as velocidades da seção 4 do escopo', () => {
+    expect(SIM_CONFIG.moveSpeedPxPerSec).toEqual({ walk: 140, slow: 80, run: 200 });
+  });
+});
+
+describe('stepPlayer: diagonal normalizada', () => {
+  it.each([
+    [1, 1],
+    [1, -1],
+    [-1, 1],
+    [-1, -1],
+  ] as const)('(%i, %i) anda a mesma distância que em linha reta', (moveX, moveY) => {
+    const end = hold(start, move(moveX, moveY, 'run'), SIM_CONFIG.tickRate);
+    const dx = end.x - start.x;
+    const dy = end.y - start.y;
+    expect(Math.hypot(dx, dy)).toBeCloseTo(200, 9);
+    expect(Math.abs(dx)).toBeCloseTo(200 * Math.SQRT1_2, 9);
+    expect(Math.sign(dx)).toBe(moveX);
+    expect(Math.sign(dy)).toBe(moveY);
+  });
+});
+
+describe('stepPlayer: sem input', () => {
+  it('fica parado, mas segue a mira e o modo do input', () => {
+    const input: MoveInput = { moveX: 0, moveY: 0, aimAngle: 1.25, moveMode: 'slow' };
+    const end = hold(start, input, 10);
+    expect(end).toEqual({ ...start, aimAngle: 1.25, moveMode: 'slow' });
+  });
+
+  it('para no tick seguinte ao último input de movimento', () => {
+    const moving = hold(start, move(1, 0), 5);
+    const stopped = hold(moving, move(0, 0), 5);
+    expect(stopped.x).toBe(moving.x);
+    expect(stopped.y).toBe(moving.y);
+  });
+
+  it('no mundo, jogador sem input no tick não se mexe', () => {
+    const other: PlayerSimState = { ...start, playerId: 'p2', x: 400 };
+    const world = createWorld(map, [start, other]);
+    const next = stepWorld(world, new Map([['p1', move(1, 0)]]), TICK_SECONDS);
+    expect(next.tick).toBe(1);
+    expect(next.players[0]?.x).toBeGreaterThan(start.x);
+    expect(next.players[1]).toBe(other);
+  });
+});
