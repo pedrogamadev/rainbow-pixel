@@ -9,9 +9,9 @@ import {
   LOBBY_ERROR_MESSAGES,
   MATCH_CONFIG,
   NET_CONFIG,
+  SIM_CONFIG,
   ServerMessageType,
   TEAM_INDEXES,
-  TICK_MS,
   isBotDifficultyId,
 } from '@rainbow-pixel/shared';
 import type {
@@ -473,7 +473,7 @@ export class QuickMatchRoom extends Room<{ state: QuickMatchRoomState; client: R
     this.state.mapId = map.id;
     this.state.matchStartedAt = Date.now();
     this.setLobby(startMatch(this.lobby));
-    this.setTimestep(() => this.runMatchFrame(), TICK_MS);
+    this.setTimestep(() => this.runMatchFrame(), SIM_CONFIG.serverLoopIntervalMs);
     console.info(`[quick_match ${this.roomId}] partida iniciada no ${map.id} (${reason}).`);
   }
 

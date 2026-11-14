@@ -21,6 +21,12 @@ export const SIM_CONFIG = {
    * mais que isso, o tempo excedente é pulado em vez de simulado.
    */
   maxCatchUpTicks: 30,
+  /**
+   * Intervalo do laço da partida no servidor, em ms. O laço acorda mais vezes que o tick e o
+   * acumulador decide quantos ticks rodar: assim cada tick (e cada snapshot) sai perto da hora
+   * certa mesmo com a resolução grosseira do timer do sistema (~15 ms no Windows).
+   */
+  serverLoopIntervalMs: 4,
   /** Lado da célula do mapa, em px. */
   cellSize: 8,
   /** Raio do círculo do jogador, em px. */
