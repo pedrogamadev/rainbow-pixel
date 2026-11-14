@@ -68,6 +68,11 @@ export const NET_CONFIG = {
   reconciliationSmoothingMs: 100,
   /** Correções acima deste tamanho entram nas métricas do cliente headless. */
   correctionMetricPx: 4,
+  /**
+   * Máximo de inputs que o cliente amostra de uma vez para recuperar atraso (aba que ficou em
+   * segundo plano, por exemplo). O resto do tempo parado é pulado.
+   */
+  clientMaxCatchUpTicks: 3,
 } as const;
 
 /** Bot nível 0: patrulha de waypoints (escopo, seção 16.3). */
