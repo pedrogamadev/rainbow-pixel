@@ -1,4 +1,4 @@
-/* Interface simples e funcional dos menus. Sem trabalho de design no marco 0.1. */
+/* Interface simples e funcional dos menus e da tela da partida. */
 
 :root {
   --bg: #14161c;
@@ -307,9 +307,109 @@ button:disabled {
   color: var(--danger);
 }
 
-/* Placeholder do canvas do jogo */
+/* Lobby: contagem para iniciar */
+
+.countdown {
+  margin: 0.9rem 0 0;
+  color: var(--ok);
+  font-size: 1.2rem;
+  font-weight: 700;
+}
+
+/* Partida */
+
+.match {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  overflow: hidden;
+}
+
+.match-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.9rem;
+  padding: 0.5rem 1rem;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+}
+
+.match-bar .info {
+  margin: 0;
+}
+
+.match-actions {
+  display: flex;
+  gap: 0.6rem;
+  margin-left: auto;
+}
 
 .game-canvas {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  cursor: crosshair;
+}
+
+.game-canvas canvas {
+  display: block;
+}
+
+/* Overlay de debug (F3) */
+
+.debug-overlay {
+  position: fixed;
+  top: 3.5rem;
+  right: 1rem;
+  width: 17rem;
+  padding: 0.8rem;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: rgb(20 22 28 / 88%);
+  font-family: ui-monospace, Consolas, monospace;
+  font-size: 0.8rem;
+}
+
+.debug-overlay h2,
+.debug-overlay h3 {
+  margin: 0 0 0.5rem;
+  font-size: 0.9rem;
+}
+
+.debug-overlay dl {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 0.2rem 0.8rem;
+  margin: 0;
+}
+
+.debug-overlay dt {
+  color: var(--muted);
+}
+
+.debug-overlay dd {
+  margin: 0;
+  text-align: right;
+}
+
+.debug-net {
   display: flex;
-  justify-content: center;
+  flex-direction: column;
+  gap: 0.4rem;
+  margin-top: 0.8rem;
+  padding-top: 0.8rem;
+  border-top: 1px solid var(--border);
+}
+
+.debug-net label {
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 0.8rem;
+}
+
+.debug-net input {
+  width: 5.5rem;
+  padding: 0.25rem 0.4rem;
 }

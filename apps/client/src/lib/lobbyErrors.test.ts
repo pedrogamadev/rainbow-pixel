@@ -13,6 +13,9 @@ describe('describeJoinError', () => {
     expect(describeJoinError({ code: JoinErrorCode.AlreadyInRoom, message: 'x' })).toBe(
       LOBBY_MESSAGES.alreadyInRoom,
     );
+    expect(describeJoinError({ code: JoinErrorCode.MatchInProgress, message: 'x' })).toBe(
+      LOBBY_MESSAGES.matchInProgress,
+    );
     expect(describeJoinError({ code: JoinErrorCode.RoomFull, message: 'x' })).toBe(
       LOBBY_MESSAGES.roomFull,
     );

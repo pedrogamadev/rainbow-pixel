@@ -6,13 +6,16 @@ import { ClientMessageType, QUICK_MATCH_ROOM_NAME, ServerMessageType } from '@ra
 import type {
   AddBotPayload,
   BotDifficultyId,
+  DevNetSettings,
   LobbyErrorPayload,
+  MatchCountdownMessage,
   QuickMatchJoinOptions,
   QuickMatchState,
   RemoveBotPayload,
   TeamIndex,
 } from '@rainbow-pixel/shared';
 import { useSyncExternalStore } from 'react';
+import type { GameTransport } from '../game/GameClient';
 import { clientEnv } from './env';
 import { LOBBY_MESSAGES, describeJoinError } from './lobbyErrors';
 import { toLobbyView } from './lobbyView';
@@ -36,6 +39,8 @@ export interface LobbySnapshot {
   readonly error: string | null;
   /** Último aviso do servidor para uma ação recusada. */
   readonly notice: string | null;
+  /** Segundos até a partida começar, durante a contagem. `null` fora dela. */
+  readonly countdown: number | null;
 }
 
 /** Falha ao criar ou entrar em uma sala, com mensagem em PT-BR pronta para a tela. */
@@ -56,7 +61,14 @@ const RECONNECT_ATTEMPT_DELAYS_MS = [0, 700, 1500] as const;
 // Estado observável
 // ---------------------------------------------------------------------------
 
-const IDLE: LobbySnapshot = { status: 'idle', code: null, view: null, error: null, notice: null };
+const IDLE: LobbySnapshot = {
+  status: 'idle',
+  code: null,
+  view: null,
+  error: null,
+  notice: null,
+  countdown: null,
+};
 
 let snapshot: LobbySnapshot = IDLE;
 const listeners = new Set<() => void>();
@@ -144,6 +156,61 @@ async function reconnectWithSavedToken(code: string): Promise<LobbyRoom | null> 
 }
 
 // ---------------------------------------------------------------------------
+// Mensagens de jogo
+// O estado do jogo não vai no schema da sala: chega em mensagens `snapshot` e `pong`, ouvidas
+// desde a entrada para nenhuma se perder enquanto a tela da partida ainda está montando.
+// ---------------------------------------------------------------------------
+
+const GAME_MESSAGES = [ServerMessageType.Snapshot, ServerMessageType.Pong] as const;
+
+const gameHandlers = new Map<string, Set<(payload: unknown) => void>>();
+const reconnectListeners = new Set<() => void>();
+
+function dispatchGame(type: string, payload: unknown): void {
+  for (const handler of gameHandlers.get(type) ?? []) {
+    handler(payload);
+  }
+}
+
+/** Conexão de jogo da sala ativa, para o GameClient. */
+export interface GameSession {
+  /** `playerId` deste cliente: o sessionId na sala. */
+  readonly selfId: string;
+  readonly transport: GameTransport;
+  /** Avisa quando a conexão volta depois de uma queda (a fila do servidor recomeça). */
+  onReconnect(listener: () => void): () => void;
+}
+
+export function getGameSession(): GameSession | null {
+  const room = activeRoom;
+  if (room === null) {
+    return null;
+  }
+  return {
+    selfId: room.sessionId,
+    transport: {
+      send(type, payload) {
+        if (activeRoom === room) room.send(type, payload);
+      },
+      onMessage(type, handler) {
+        const handlers = gameHandlers.get(type) ?? new Set();
+        handlers.add(handler);
+        gameHandlers.set(type, handlers);
+        return () => {
+          handlers.delete(handler);
+        };
+      },
+    },
+    onReconnect(listener) {
+      reconnectListeners.add(listener);
+      return () => {
+        reconnectListeners.delete(listener);
+      };
+    },
+  };
+}
+
+// ---------------------------------------------------------------------------
 // Sala ativa
 // ---------------------------------------------------------------------------
 
@@ -157,11 +224,12 @@ let entering: { readonly code: string; readonly promise: Promise<void> } | null 
 function attachRoom(room: LobbyRoom): void {
   activeRoom = room;
   saveReconnectionToken(window.sessionStorage, room.reconnectionToken);
-  setSnapshot({ status: 'joined', code: room.roomId, view: null, error: null, notice: null });
+  setSnapshot({ ...IDLE, status: 'joined', code: room.roomId });
 
   room.onStateChange((state) => {
     if (activeRoom === room) {
-      patchSnapshot({ view: toLobbyView(state, room.sessionId) });
+      const view = toLobbyView(state, room.sessionId);
+      patchSnapshot(view.phase === 'match' ? { view, countdown: null } : { view });
     }
   });
 
@@ -170,6 +238,20 @@ function attachRoom(room: LobbyRoom): void {
       patchSnapshot({ notice: payload.message });
     }
   });
+
+  room.onMessage<MatchCountdownMessage>(ServerMessageType.MatchCountdown, (payload) => {
+    if (activeRoom === room) {
+      patchSnapshot({ countdown: payload.secondsLeft });
+    }
+  });
+
+  for (const type of GAME_MESSAGES) {
+    room.onMessage<unknown>(type, (payload) => {
+      if (activeRoom === room) {
+        dispatchGame(type, payload);
+      }
+    });
+  }
 
   // Queda de conexão: o SDK tenta voltar sozinho e avisa em onReconnect ou onLeave.
   room.onDrop(() => {
@@ -183,6 +265,9 @@ function attachRoom(room: LobbyRoom): void {
       return;
     }
     patchSnapshot({ status: 'joined' });
+    for (const listener of reconnectListeners) {
+      listener();
+    }
     // O SDK só troca o token depois de avisar os ouvintes.
     queueMicrotask(() => {
       if (activeRoom === room) {
@@ -203,11 +288,10 @@ function attachRoom(room: LobbyRoom): void {
     }
     activeRoom = null;
     setSnapshot({
+      ...IDLE,
       status: 'closed',
       code: room.roomId,
-      view: null,
       error: LOBBY_MESSAGES.connectionLost,
-      notice: null,
     });
   });
 }
@@ -337,6 +421,21 @@ export function addBot(team: TeamIndex, difficulty: BotDifficultyId): void {
 export function removeBot(playerId: string): void {
   const payload: RemoveBotPayload = { playerId };
   activeRoom?.send(ClientMessageType.RemoveBot, payload);
+}
+
+/** Somente o host: a sala volta para o lobby. */
+export function endMatch(): void {
+  activeRoom?.send(ClientMessageType.EndMatch);
+}
+
+/** Ferramenta de teste: o host inicia a partida com quem estiver na sala. */
+export function forceStartMatch(): void {
+  activeRoom?.send(ClientMessageType.DevForceStart);
+}
+
+/** Ferramenta de teste: troca o simulador de lag deste cliente no servidor. */
+export function setDevNet(settings: DevNetSettings): void {
+  activeRoom?.send(ClientMessageType.DevSetNet, settings);
 }
 
 export function dismissLobbyNotice(): void {

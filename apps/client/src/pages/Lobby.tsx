@@ -12,14 +12,17 @@ import {
   addBot,
   dismissLobbyNotice,
   enterLobby,
+  forceStartMatch,
   leaveLobby,
   removeBot,
   toggleReady,
   useLobby,
 } from '../lib/colyseus';
+import { clientEnv } from '../lib/env';
 import { LOBBY_MESSAGES } from '../lib/lobbyErrors';
 import type { LobbyPlayerView } from '../lib/lobbyView';
 import { ROUTES } from '../routes';
+import { Match } from './Match';
 
 const BOT_DIFFICULTY_OPTIONS = BOT_DIFFICULTIES.filter((difficulty) => difficulty.enabled);
 
@@ -222,6 +225,11 @@ export function Lobby() {
 
   const reconnecting = lobby.status === 'reconnecting';
 
+  // A partida acontece na mesma sala: com a fase `match`, a tela vira a da partida.
+  if (view.phase === 'match') {
+    return <Match view={view} reconnecting={reconnecting} onLeave={() => void leave()} />;
+  }
+
   return (
     <Screen title="Lobby" wide>
       <section className="room-code">
@@ -253,6 +261,12 @@ export function Lobby() {
       <p>
         Jogadores: {view.playerCount}/{MATCH_CONFIG.maxPlayers}
       </p>
+
+      {lobby.countdown !== null && (
+        <p className="countdown" role="status">
+          A partida começa em {lobby.countdown}...
+        </p>
+      )}
 
       <div className="teams">
         {view.teams.map((team) => (
@@ -286,6 +300,16 @@ export function Lobby() {
         <button type="button" disabled={reconnecting || view.self === null} onClick={toggleReady}>
           {view.self?.ready === true ? 'Cancelar pronto' : 'Pronto'}
         </button>
+        {clientEnv.devTools && view.isHost && (
+          <button
+            type="button"
+            className="secondary"
+            disabled={reconnecting}
+            onClick={forceStartMatch}
+          >
+            Iniciar agora (teste)
+          </button>
+        )}
         <button type="button" className="secondary" onClick={() => void leave()}>
           Sair
         </button>

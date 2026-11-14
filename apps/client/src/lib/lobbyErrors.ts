@@ -14,6 +14,7 @@ export const LOBBY_MESSAGES = {
   alreadyInRoom:
     'Você já está nesta sala em outra aba ou conexão. Feche a outra ou tente de novo em instantes.',
   roomFull: 'A sala está cheia.',
+  matchInProgress: 'A partida desta sala já começou. Só quem já estava nela pode voltar.',
   roomNotFound: 'Sala não encontrada. Confira o código.',
   serverUnavailable:
     'Não foi possível falar com o servidor. Verifique sua conexão e tente de novo.',
@@ -47,6 +48,8 @@ export function describeJoinError(error: unknown): string {
       return LOBBY_MESSAGES.alreadyInRoom;
     case JoinErrorCode.RoomFull:
       return LOBBY_MESSAGES.roomFull;
+    case JoinErrorCode.MatchInProgress:
+      return LOBBY_MESSAGES.matchInProgress;
     case MATCHMAKE_INVALID_ROOM_ID:
     case 404:
       return typeof message === 'string' && message.includes('locked')

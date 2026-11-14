@@ -38,6 +38,9 @@ importers:
       '@colyseus/sdk':
         specifier: ^0.18.10
         version: 0.18.10(@colyseus/core@0.18.28)(typescript@6.0.3)(zod@4.6.7)
+      '@rainbow-pixel/maps':
+        specifier: workspace:*
+        version: link:../../packages/maps
       '@rainbow-pixel/shared':
         specifier: workspace:*
         version: link:../../packages/shared
