@@ -1,5 +1,6 @@
 import type { BotDifficultyId } from '../catalog/botDifficulties.js';
-import type { InputCommand, MoveMode, TeamIndex } from '../sim/types.js';
+import type { WeaponId, WeaponSlot } from '../catalog/weapons.js';
+import type { InputCommand, MoveMode, TeamIndex, Vec2, WeaponState } from '../sim/types.js';
 
 // ---------------------------------------------------------------------------
 // API REST
@@ -119,6 +120,8 @@ export const ClientMessageType = {
   DevForceStart: 'dev_force_start',
   /** Somente com DEV_TOOLS=true no servidor. */
   DevSetNet: 'dev_set_net',
+  /** Comandos de debug (teleporte, vida infinita, dispersão zero). Somente com DEV_TOOLS=true. */
+  DevCommand: 'dev_command',
 } as const;
 
 export interface AddBotPayload {
@@ -147,6 +150,8 @@ export type LobbyErrorCode =
   | 'already_in_room'
   | 'invalid_payload'
   | 'match_in_progress'
+  | 'match_not_started'
+  | 'teleport_blocked'
   | 'dev_tools_disabled';
 
 export const LOBBY_ERROR_MESSAGES: Readonly<Record<LobbyErrorCode, string>> = {
@@ -159,6 +164,8 @@ export const LOBBY_ERROR_MESSAGES: Readonly<Record<LobbyErrorCode, string>> = {
   already_in_room: 'Você já está nesta sala.',
   invalid_payload: 'Pedido inválido.',
   match_in_progress: 'A partida já está em andamento.',
+  match_not_started: 'Isso só funciona durante a partida.',
+  teleport_blocked: 'Não dá para teleportar para dentro de uma parede.',
   dev_tools_disabled: 'As ferramentas de teste estão desligadas no servidor.',
 };
 
@@ -185,7 +192,82 @@ export interface SnapshotPlayer {
   readonly aimAngle: number;
   readonly moveMode: MoveMode;
   readonly connected: boolean;
+  readonly alive: boolean;
+  /** Arma na mão. */
+  readonly activeSlot: WeaponSlot;
+  /** Vida: só do próprio jogador e dos aliados. Vida de inimigo nunca é enviada. */
+  readonly health?: number;
 }
+
+/** Comandos de debug ligados para o próprio jogador (ferramenta de teste). */
+export interface DevFlags {
+  readonly god: boolean;
+  readonly noSpread: boolean;
+}
+
+/** Estado completo do próprio jogador, usado pela reconciliação. */
+export interface SnapshotSelf {
+  readonly x: number;
+  readonly y: number;
+  readonly aimAngle: number;
+  readonly moveMode: MoveMode;
+  readonly health: number;
+  readonly alive: boolean;
+  /** Tempo até renascer, em ms. `null` enquanto vivo. */
+  readonly respawnInMs: number | null;
+  readonly weapon: WeaponState;
+  readonly dev: DevFlags;
+}
+
+export const MATCH_EVENT_KINDS = ['shot', 'hit_confirm', 'damage_taken', 'kill'] as const;
+
+export type MatchEventKind = (typeof MATCH_EVENT_KINDS)[number];
+
+interface MatchEventBase {
+  /** Crescente na partida. O cliente descarta eventId já visto. */
+  readonly eventId: number;
+  /** Tick do servidor em que aconteceu. */
+  readonly tick: number;
+}
+
+/** Um disparo. Vai para todos. */
+export interface ShotEvent extends MatchEventBase {
+  readonly kind: 'shot';
+  readonly shooterId: string;
+  readonly weaponId: WeaponId;
+  /** Centro do atirador quando disparou. */
+  readonly origin: Vec2;
+  /** Onde o raio parou. */
+  readonly end: Vec2;
+}
+
+/** Acerto confirmado pelo servidor. Vai só para o atirador. */
+export interface HitConfirmEvent extends MatchEventBase {
+  readonly kind: 'hit_confirm';
+  /** `seq` do input que disparou. */
+  readonly seq: number;
+  readonly targetId: string;
+  readonly damage: number;
+  readonly killed: boolean;
+}
+
+/** Dano recebido. Vai só para a vítima. */
+export interface DamageTakenEvent extends MatchEventBase {
+  readonly kind: 'damage_taken';
+  readonly damage: number;
+  /** De onde veio o tiro (centro do atirador). */
+  readonly origin: Vec2;
+}
+
+/** Abate. Vai para todos. */
+export interface KillEvent extends MatchEventBase {
+  readonly kind: 'kill';
+  readonly killerId: string;
+  readonly victimId: string;
+  readonly weaponId: WeaponId;
+}
+
+export type MatchEvent = ShotEvent | HitConfirmEvent | DamageTakenEvent | KillEvent;
 
 /** servidor -> cliente, a 20 Hz. Montado para cada cliente. */
 export interface SnapshotMessage {
@@ -194,7 +276,15 @@ export interface SnapshotMessage {
   readonly serverTimeMs: number;
   /** Último `seq` de input deste cliente já processado pelo servidor. 0 se nenhum. */
   readonly ackSeq: number;
+  /** O próprio jogador. `null` se quem recebe não está na partida. */
+  readonly self: SnapshotSelf | null;
+  /** Todos os jogadores (o fog of war entra no marco 0.5). */
   readonly players: readonly SnapshotPlayer[];
+  /**
+   * Eventos deste snapshot e dos últimos NET_CONFIG.eventRedundancySnapshots snapshots deste
+   * cliente, em ordem de eventId.
+   */
+  readonly events: readonly MatchEvent[];
 }
 
 /** cliente -> servidor, a cada 1 s. */
@@ -214,6 +304,12 @@ export interface MatchCountdownMessage {
   /** Segundos até a partida começar. `null`: contagem cancelada. */
   readonly secondsLeft: number | null;
 }
+
+/** cliente -> servidor: comando de debug, sempre aplicado a quem envia (ferramenta de teste). */
+export type DevCommand =
+  | { readonly kind: 'teleport'; readonly x: number; readonly y: number }
+  | { readonly kind: 'god'; readonly enabled: boolean }
+  | { readonly kind: 'no_spread'; readonly enabled: boolean };
 
 /** Simulador de lag de um cliente (ferramenta de teste). */
 export interface DevNetSettings {
