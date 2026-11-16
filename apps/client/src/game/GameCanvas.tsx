@@ -1,5 +1,4 @@
 import { createCollisionGrid, getMap } from '@rainbow-pixel/maps';
-import type { TeamIndex } from '@rainbow-pixel/shared';
 import { Application, Container } from 'pixi.js';
 import { useEffect, useRef } from 'react';
 import type { GameSession } from '../lib/colyseus';
@@ -10,8 +9,8 @@ import { BACKGROUND_COLOR } from './render/palette';
 import { PlayersView, createGhost } from './render/playersView';
 import type { DrawnPlayer } from './render/playersView';
 
+/** O que a tela da partida sabe de cada jogador pelo lobby. O time vem do snapshot. */
 export interface PlayerInfo {
-  readonly team: TeamIndex;
   readonly nickname: string;
 }
 
@@ -24,7 +23,7 @@ export interface GameHandle {
 interface GameCanvasProps {
   readonly session: GameSession;
   readonly mapId: string;
-  /** Time e nickname de cada jogador, pelo playerId (vêm do estado da sala). */
+  /** Nickname de cada jogador, pelo playerId (vem do estado da sala). */
   readonly players: ReadonlyMap<string, PlayerInfo>;
   /** Desenha o fantasma da posição confirmada pelo servidor (overlay de debug). */
   readonly showGhost: boolean;
@@ -32,7 +31,7 @@ interface GameCanvasProps {
   readonly onReady?: (handle: GameHandle | null) => void;
 }
 
-const UNKNOWN_PLAYER: PlayerInfo = { team: 0, nickname: '' };
+const UNKNOWN_PLAYER: PlayerInfo = { nickname: '' };
 
 /** Partida em PixiJS: mapa, jogadores e câmera seguindo o próprio jogador. */
 export function GameCanvas({ session, mapId, players, showGhost, onReady }: GameCanvasProps) {

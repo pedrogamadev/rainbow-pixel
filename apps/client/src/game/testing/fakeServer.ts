@@ -63,7 +63,7 @@ export class FakeServer {
       tick: this.tick,
       serverTimeMs,
       ackSeq: this.ackSeq,
-      players: [{ ...this.state, connected: true }],
+      players: [{ ...this.state, team: 0, connected: true }],
     };
   }
 }

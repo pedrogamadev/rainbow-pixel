@@ -52,6 +52,8 @@ export class MatchSimulation {
   readonly mapId: string;
   private world: SimWorld;
   private readonly queues = new Map<string, InputQueueState>();
+  /** Time de cada jogador, pelo playerId. */
+  private readonly teams = new Map<string, TeamIndex>();
   private readonly bots: BotController;
   private readonly startMs: number;
   /** Tempo pulado porque o processo ficou parado (veja SIM_CONFIG.maxCatchUpTicks). */
@@ -71,6 +73,7 @@ export class MatchSimulation {
     this.world = createWorld(createCollisionGrid(map), states);
     for (const player of players) {
       this.queues.set(player.playerId, createInputQueue());
+      this.teams.set(player.playerId, player.team);
     }
     this.bots = new BotController({
       mapId: map.id,
@@ -150,6 +153,7 @@ export class MatchSimulation {
       ackSeq: this.queues.get(viewerId)?.lastProcessedSeq ?? 0,
       serverTimeMs: this.serverTimeMs,
       isConnected,
+      teamOf: (playerId) => this.teams.get(playerId) ?? 0,
     });
   }
 
@@ -171,6 +175,8 @@ export class MatchSimulation {
     }
     this.queues.delete(oldId);
     this.queues.set(newId, createInputQueue());
+    this.teams.set(newId, this.teams.get(oldId) ?? 0);
+    this.teams.delete(oldId);
     this.world = {
       ...this.world,
       players: this.world.players.map((player) =>
@@ -183,6 +189,7 @@ export class MatchSimulation {
     if (!this.queues.delete(playerId)) {
       return;
     }
+    this.teams.delete(playerId);
     this.world = {
       ...this.world,
       players: this.world.players.filter((player) => player.playerId !== playerId),

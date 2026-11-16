@@ -22,10 +22,7 @@ export function Match({ view, reconnecting, onLeave }: MatchProps) {
   const players = useMemo(
     () =>
       new Map<string, PlayerInfo>(
-        view.players.map((player) => [
-          player.playerId,
-          { team: player.team, nickname: player.nickname },
-        ]),
+        view.players.map((player) => [player.playerId, { nickname: player.nickname }]),
       ),
     [view.players],
   );

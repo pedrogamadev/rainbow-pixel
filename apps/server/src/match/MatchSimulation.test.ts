@@ -137,6 +137,23 @@ describe('MatchSimulation: inputs dos humanos', () => {
     expect(fast).toBeLessThanOrEqual(normal + 1e-6);
   });
 
+  it('o snapshot traz o time de cada jogador, sem depender do lobby', () => {
+    const snapshot = create().snapshotFor('ana', () => true);
+    expect(snapshot.players.map((item) => [item.playerId, item.team])).toEqual([
+      ['ana', 0],
+      ['bot:1', 1],
+      ['bot:2', 0],
+      ['bot:3', 1],
+    ]);
+  });
+
+  it('a vaga retomada por outra aba mantém o time no snapshot', () => {
+    const sim = create();
+    sim.renamePlayer('bot:1', 'nova');
+    const snapshot = sim.snapshotFor('nova', () => true);
+    expect(snapshot.players.find((item) => item.playerId === 'nova')?.team).toBe(1);
+  });
+
   it('ignora input de jogador que não está na partida', () => {
     expect(create().enqueueInputs('estranho', [input(1)], START)).toBeNull();
   });

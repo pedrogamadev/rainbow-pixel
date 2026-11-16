@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest';
 import { InterpolationBuffer } from './interpolation.js';
 
 function player(playerId: string, x: number, y: number, aimAngle = 0): SnapshotPlayer {
-  return { playerId, x, y, aimAngle, moveMode: 'walk', connected: true };
+  return { playerId, team: 0, x, y, aimAngle, moveMode: 'walk', connected: true };
 }
 
 function snapshot(serverTimeMs: number, players: SnapshotPlayer[]): SnapshotMessage {

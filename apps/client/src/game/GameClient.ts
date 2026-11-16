@@ -14,6 +14,7 @@ import type {
   PongMessage,
   SnapshotMessage,
   SnapshotPlayer,
+  TeamIndex,
 } from '@rainbow-pixel/shared';
 import { ServerClock } from './clock.js';
 import { InterpolationBuffer } from './interpolation.js';
@@ -41,6 +42,8 @@ export interface GameClientOptions {
 
 export interface RenderedPlayer {
   readonly playerId: string;
+  /** Time que veio no snapshot. */
+  readonly team: TeamIndex;
   readonly x: number;
   readonly y: number;
   readonly aimAngle: number;
@@ -189,6 +192,7 @@ export class GameClient {
     const position = this.predictor.displayPosition(this.options.now());
     return {
       playerId: predicted.playerId,
+      team: this.serverSelf()?.team ?? 0,
       ...position,
       aimAngle: predicted.aimAngle,
       connected: true,

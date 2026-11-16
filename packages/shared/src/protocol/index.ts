@@ -182,6 +182,8 @@ export interface InputMessage {
 
 export interface SnapshotPlayer {
   readonly playerId: string;
+  /** Time do jogador: a visão do bot e o render não dependem do schema do lobby. */
+  readonly team: TeamIndex;
   readonly x: number;
   readonly y: number;
   readonly aimAngle: number;

@@ -59,9 +59,10 @@ function snapshot(
     serverTimeMs,
     ackSeq,
     players: [
-      { playerId: 'eu', x: 500, y: 500, aimAngle: 0, moveMode: 'walk', connected: true },
+      { playerId: 'eu', team: 0, x: 500, y: 500, aimAngle: 0, moveMode: 'walk', connected: true },
       ...others.map((other, index) => ({
         playerId: `outro${index}`,
+        team: 1 as const,
         x: other.x,
         y: 100,
         aimAngle: 0,
@@ -153,7 +154,9 @@ describe('GameClient', () => {
     test.transport.emit(ServerMessageType.Snapshot, snapshot(0, 0));
     test.transport.emit(ServerMessageType.Snapshot, {
       ...snapshot(50, 0),
-      players: [{ playerId: 'eu', x: 510, y: 500, aimAngle: 0, moveMode: 'walk', connected: true }],
+      players: [
+        { playerId: 'eu', team: 0, x: 510, y: 500, aimAngle: 0, moveMode: 'walk', connected: true },
+      ],
     });
     expect(seen).toEqual([10]);
     expect(test.client.stats()).toMatchObject({ correctionsPerSecond: 1, lastCorrectionPx: 10 });
