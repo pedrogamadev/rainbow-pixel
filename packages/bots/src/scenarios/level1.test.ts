@@ -335,4 +335,18 @@ describe('bot nível 1: morto', () => {
     const result = run(HARD, 5, fixed([enemy('e', 1400, 1000)], { self: { alive: false } }));
     expect(result.intents.every((intent) => !intent.fire && intent.moveX === 0)).toBe(true);
   });
+
+  it('ao renascer, recomeça a patrulha pelo waypoint mais perto', () => {
+    const waypoints = [
+      { x: 1000, y: 1200 },
+      { x: 3000, y: 1200 },
+      { x: 3000, y: 3000 },
+    ];
+    const memory = createBotMemory(SEED);
+    memory.waypointIndex = 2;
+    HARD.decide(botView({ self: { alive: false }, waypoints }), memory, DECISION_MS);
+    const intent = HARD.decide(botView({ waypoints }), memory, DECISION_MS);
+    expect(memory.waypointIndex).toBe(0);
+    expect(intent).toMatchObject({ moveX: 0, moveY: 1 });
+  });
 });

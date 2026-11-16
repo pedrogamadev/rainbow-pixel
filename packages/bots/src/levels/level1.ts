@@ -49,7 +49,12 @@ export function createLevel1Brain(params: BotDifficultyParams): BotBrain {
     const reload = self.alive && self.ammo === 0 && !self.reloading;
 
     if (!self.alive) {
+      // Morto: esquece o alvo e, ao renascer no spawn, recomeça a patrulha pelo waypoint mais
+      // perto, como o nível 0 faz no início da partida.
       forgetTarget(memory);
+      memory.waypointIndex = null;
+      memory.pauseLeftMs = 0;
+      memory.aimAngle = null;
       return { moveX: 0, moveY: 0, aimAngle: self.aimAngle, moveMode: 'walk', ...HOLD_FIRE };
     }
 
