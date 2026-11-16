@@ -7,8 +7,8 @@ import {
   MATCH_PHASES,
   QUICK_MATCH_ROOM_NAME,
   ServerMessageType,
-  TEAM_INDEXES,
 } from './index.js';
+import { TEAM_INDEXES } from '../sim/types.js';
 
 describe('protocolo da sala quick_match', () => {
   it('usa o nome de sala registrado no servidor', () => {

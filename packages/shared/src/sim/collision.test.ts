@@ -4,6 +4,7 @@ import { createSeededRandom } from '../random/index.js';
 import { circleOverlapsSolid, moveCircle } from './collision.js';
 import { TICK_SECONDS, stepPlayer } from './movement.js';
 import { mapWithWalls } from './testing/asciiMap.js';
+import { testPlayer } from './testing/fixtures.js';
 import type { AsciiMap } from './testing/asciiMap.js';
 import type { MoveAxis, MoveInput, PlayerSimState } from './types.js';
 
@@ -12,7 +13,7 @@ const RUN_STEP = SIM_CONFIG.moveSpeedPxPerSec.run * TICK_SECONDS;
 const WALK_STEP = SIM_CONFIG.moveSpeedPxPerSec.walk * TICK_SECONDS;
 
 function player(x: number, y: number): PlayerSimState {
-  return { playerId: 'p1', x, y, aimAngle: 0, moveMode: 'walk' };
+  return testPlayer('p1', x, y);
 }
 
 function input(moveX: MoveAxis, moveY: MoveAxis, moveMode: MoveInput['moveMode'] = 'walk') {

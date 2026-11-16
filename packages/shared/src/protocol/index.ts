@@ -1,5 +1,5 @@
 import type { BotDifficultyId } from '../catalog/botDifficulties.js';
-import type { InputCommand, MoveMode } from '../sim/types.js';
+import type { InputCommand, MoveMode, TeamIndex } from '../sim/types.js';
 
 // ---------------------------------------------------------------------------
 // API REST
@@ -39,10 +39,6 @@ export interface ApiErrorBody {
 // ---------------------------------------------------------------------------
 
 export const QUICK_MATCH_ROOM_NAME = 'quick_match';
-
-export const TEAM_INDEXES = [0, 1] as const;
-
-export type TeamIndex = (typeof TEAM_INDEXES)[number];
 
 export type LobbyPlayerKind = 'human' | 'bot';
 

@@ -68,7 +68,6 @@ describe('BOT_LEVEL0_CONFIG', () => {
     expect(BOT_LEVEL0_CONFIG.decisionRateHz).toBe(10);
     expect(SIM_CONFIG.tickRate % BOT_LEVEL0_CONFIG.decisionRateHz).toBe(0);
   });
-
 });
 
 describe('LOBBY_CONFIG', () => {
