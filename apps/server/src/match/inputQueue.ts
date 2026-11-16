@@ -4,7 +4,10 @@
 // - guarda no máximo NET_CONFIG.inputQueueMax inputs (os mais antigos saem);
 // - descarta o que passar de NET_CONFIG.maxInputsPerSecond inputs novos por segundo.
 // A cada tick o jogador consome 1 input. Sem input na fila, o último se repete por até
-// NET_CONFIG.inputRepeatTicks ticks e depois o jogador para.
+// NET_CONFIG.inputRepeatTicks ticks e depois o jogador para. O input repetido sai marcado
+// (`repeated`): mantém movimento e mira, mas não conta como ação (não dispara, não recarrega e
+// não troca de arma). O gatilho pressionado continua o do último input real, para a detecção de
+// borda das armas semiautomáticas não gerar tiro extra quando o input real voltar.
 
 import { NET_CONFIG, isMoveMode } from '@rainbow-pixel/shared';
 import type { InputCommand, MoveAxis } from '@rainbow-pixel/shared';
@@ -128,6 +131,11 @@ export interface TickInput {
   readonly state: InputQueueState;
   /** Input a aplicar neste tick. `null`: o jogador fica parado. */
   readonly input: InputCommand | null;
+  /**
+   * O input é a repetição do último, com a fila vazia: vale para movimento e mira, mas não
+   * para ações (disparo, recarga e troca de arma).
+   */
+  readonly repeated: boolean;
 }
 
 /** Input do jogador neste tick. */
@@ -143,12 +151,17 @@ export function takeTickInput(state: InputQueueState): TickInput {
         repeatedTicks: 0,
       },
       input: next,
+      repeated: false,
     };
   }
   if (state.lastInput !== null && state.repeatedTicks < NET_CONFIG.inputRepeatTicks) {
-    return { state: { ...state, repeatedTicks: state.repeatedTicks + 1 }, input: state.lastInput };
+    return {
+      state: { ...state, repeatedTicks: state.repeatedTicks + 1 },
+      input: state.lastInput,
+      repeated: true,
+    };
   }
-  return { state, input: null };
+  return { state, input: null, repeated: false };
 }
 
 /**

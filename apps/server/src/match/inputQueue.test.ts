@@ -143,6 +143,18 @@ describe('takeTickInput', () => {
     expect(state.lastProcessedSeq).toBe(1);
   });
 
+  it('marca o input repetido, que não vale como ação', () => {
+    let state = enqueue(createInputQueue(), [input(1)]);
+    const real = takeTickInput(state);
+    expect(real.repeated).toBe(false);
+    state = real.state;
+    const repeated = takeTickInput(state);
+    expect(repeated.repeated).toBe(true);
+    expect(repeated.input?.seq).toBe(1);
+    state = enqueue(repeated.state, [input(2)]);
+    expect(takeTickInput(state).repeated).toBe(false);
+  });
+
   it('um input novo depois da repetição volta a valer', () => {
     let state = takeTickInput(enqueue(createInputQueue(), [input(1)])).state;
     state = takeTickInput(state).state;
