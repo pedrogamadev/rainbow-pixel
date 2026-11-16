@@ -3,6 +3,7 @@ import type { TeamIndex } from '@rainbow-pixel/shared';
 import { Container, Graphics, Text } from 'pixi.js';
 import {
   AIM_LINE_COLOR,
+  DEAD_ALPHA,
   GHOST_COLOR,
   NICKNAME_COLOR,
   SELF_OUTLINE_COLOR,
@@ -18,6 +19,7 @@ export interface DrawnPlayer {
   readonly team: TeamIndex;
   readonly nickname: string;
   readonly connected: boolean;
+  readonly alive: boolean;
   readonly isSelf: boolean;
 }
 
@@ -50,7 +52,10 @@ function createSprite(): PlayerSprite {
   return { root, body, aim, name, team: null, isSelf: null };
 }
 
-/** Círculo por jogador, com a linha da mira, cor do time e nickname acima. */
+/**
+ * Círculo por jogador, com a linha da mira, cor do time e nickname acima. Quem morreu fica no
+ * lugar como um círculo apagado, sem a linha da mira.
+ */
 export class PlayersView {
   readonly container = new Container();
   private readonly sprites = new Map<string, PlayerSprite>();
@@ -78,7 +83,8 @@ export class PlayersView {
       }
       sprite.root.position.set(player.x, player.y);
       sprite.aim.rotation = player.aimAngle;
-      sprite.root.alpha = player.connected ? 1 : DISCONNECTED_ALPHA;
+      sprite.aim.visible = player.alive;
+      sprite.root.alpha = !player.alive ? DEAD_ALPHA : player.connected ? 1 : DISCONNECTED_ALPHA;
     }
     for (const [playerId, sprite] of this.sprites) {
       if (!seen.has(playerId)) {

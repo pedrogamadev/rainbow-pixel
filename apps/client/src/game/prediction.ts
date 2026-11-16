@@ -1,13 +1,20 @@
-// Previsão e reconciliação do próprio movimento.
-// TypeScript puro (sem DOM): também usado pelo cliente headless.
+// Previsão e reconciliação do próprio jogador: posição, mira e arma (munição, recarga, troca,
+// recuo e dispersão). TypeScript puro (sem DOM): também usado pelo cliente headless.
 //
-// Cada input é aplicado na hora com a mesma simulação do servidor e guardado como pendente.
-// Quando chega um snapshot, a previsão recomeça da posição do servidor e reaplica só os
-// inputs com seq > ackSeq. Se o resultado difere do que estava previsto, o erro abaixo de
-// 32 px é desfeito suavemente em 100 ms; acima disso, a correção é imediata.
+// Cada input é aplicado na hora com a mesma simulação do servidor (stepSelf) e guardado como
+// pendente. Quando chega um snapshot, a previsão recomeça do `self` do servidor e reaplica só os
+// inputs com seq > ackSeq. Se a posição refeita difere da prevista, o erro abaixo de 32 px é
+// desfeito suavemente em 100 ms; acima disso, a correção é imediata. A métrica de correção mede
+// só a posição. O cliente não conhece a seed: o desvio dos tiros previstos é 0.
 
-import { NET_CONFIG, TICK_SECONDS, stepPlayer } from '@rainbow-pixel/shared';
-import type { CollisionMap, InputCommand, PlayerSimState, Vec2 } from '@rainbow-pixel/shared';
+import { NET_CONFIG, TICK_SECONDS, stepSelf } from '@rainbow-pixel/shared';
+import type {
+  CollisionMap,
+  InputCommand,
+  PlayerSimState,
+  ShotFired,
+  Vec2,
+} from '@rainbow-pixel/shared';
 
 /** Estado do próprio jogador que veio no snapshot. */
 export type ServerPlayerState = Omit<PlayerSimState, 'playerId'>;
@@ -42,12 +49,18 @@ export class Predictor {
     return this.pending;
   }
 
-  /** Aplica o input agora e guarda até o servidor confirmar. */
-  applyInput(input: InputCommand): void {
+  /**
+   * Aplica o input agora e guarda até o servidor confirmar. Devolve o disparo previsto (sem
+   * desvio), para o tracer local; `null` se não disparou ou antes do primeiro snapshot.
+   */
+  applyInput(input: InputCommand): ShotFired | null {
     this.pending.push(input);
-    if (this.state !== null) {
-      this.state = stepPlayer(this.map, this.state, input, TICK_SECONDS);
+    if (this.state === null) {
+      return null;
     }
+    const { state, shot } = stepSelf(this.map, this.state, input, { dt: TICK_SECONDS });
+    this.state = state;
+    return shot;
   }
 
   /**
@@ -58,7 +71,7 @@ export class Predictor {
     this.pending = this.pending.filter((input) => input.seq > ackSeq);
     let replayed: PlayerSimState = { playerId: this.playerId, ...server };
     for (const input of this.pending) {
-      replayed = stepPlayer(this.map, replayed, input, TICK_SECONDS);
+      replayed = stepSelf(this.map, replayed, input, { dt: TICK_SECONDS }).state;
     }
 
     const previous = this.state;

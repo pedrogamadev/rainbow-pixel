@@ -24,3 +24,16 @@ export const AIM_LINE_COLOR = 0xffffff;
 export const NICKNAME_COLOR = 0xe8eaf0;
 /** Posição confirmada pelo servidor, desenhada sobre a prevista no overlay de debug. */
 export const GHOST_COLOR = 0x4cc38a;
+
+/** Tracer do próprio tiro (previsto) e dos tiros dos outros (eventos). */
+export const OWN_TRACER_COLOR = 0xfff3c4;
+export const OTHER_TRACER_COLOR = 0xffd27a;
+/** Linhas da mira com a abertura atual. */
+export const CROSSHAIR_COLOR = 0xffffff;
+/** Marcador de acerto confirmado pelo servidor e de abate. */
+export const HIT_MARKER_COLOR = 0xffffff;
+export const KILL_MARKER_COLOR = 0xff5a5a;
+/** Arco na borda da tela na direção de onde veio o dano. */
+export const DAMAGE_INDICATOR_COLOR = 0xff3b3b;
+/** Opacidade do corpo de quem morreu. */
+export const DEAD_ALPHA = 0.25;

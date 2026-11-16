@@ -1,11 +1,11 @@
-import { NET_CONFIG, TICK_MS } from '@rainbow-pixel/shared';
+import { NET_CONFIG, TICK_MS, createPlayerState } from '@rainbow-pixel/shared';
 import type { InputCommand, PlayerSimState } from '@rainbow-pixel/shared';
 import { describe, expect, it } from 'vitest';
 import { Predictor } from './prediction.js';
 import type { Correction } from './prediction.js';
 import { FakeServer, openMap } from './testing/fakeServer.js';
 
-const START: PlayerSimState = { playerId: 'eu', x: 1000, y: 1000, aimAngle: 0, moveMode: 'walk' };
+const START: PlayerSimState = createPlayerState({ playerId: 'eu', team: 0, x: 1000, y: 1000 });
 
 /** Anda em quadrado: 20 ticks para cada lado. */
 function squareInput(seq: number): InputCommand {
@@ -18,7 +18,17 @@ function squareInput(seq: number): InputCommand {
       [0, -1],
     ] as const
   )[side] ?? [0, 0];
-  return { seq, moveX, moveY, aimAngle: 0, moveMode: 'walk' };
+  return {
+    seq,
+    moveX,
+    moveY,
+    aimAngle: 0,
+    moveMode: 'walk',
+    fire: false,
+    reload: false,
+    weaponSlot: 'primary',
+    viewTimeMs: 0,
+  };
 }
 
 interface Run {

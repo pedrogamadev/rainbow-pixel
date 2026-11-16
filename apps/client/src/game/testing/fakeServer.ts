@@ -1,7 +1,7 @@
 // Servidor de mentira para os testes da previsão: aplica os inputs com a mesma simulação, com
 // atraso de ida e de volta medido em ticks. Só para testes; o cliente não importa este arquivo.
 
-import { SIM_CONFIG, TICK_SECONDS, stepPlayer } from '@rainbow-pixel/shared';
+import { SIM_CONFIG, TICK_SECONDS, stepSelf } from '@rainbow-pixel/shared';
 import type {
   CollisionMap,
   InputCommand,
@@ -43,7 +43,8 @@ export class FakeServer {
       if (next !== undefined && next.input.seq > this.ackSeq) this.queue.push(next.input);
     }
     let input: InputCommand | null | undefined;
-    if (this.repeatOnTicks.has(this.tick)) {
+    const repeated = this.repeatOnTicks.has(this.tick);
+    if (repeated) {
       input = this.last;
     } else {
       input = this.queue.shift();
@@ -53,7 +54,7 @@ export class FakeServer {
       }
     }
     if (input !== null && input !== undefined) {
-      this.state = stepPlayer(map, this.state, input, TICK_SECONDS);
+      this.state = stepSelf(map, this.state, input, { dt: TICK_SECONDS, repeated }).state;
     }
     this.tick += 1;
   }
@@ -63,7 +64,32 @@ export class FakeServer {
       tick: this.tick,
       serverTimeMs,
       ackSeq: this.ackSeq,
-      players: [{ ...this.state, team: 0, connected: true }],
+      self: {
+        x: this.state.x,
+        y: this.state.y,
+        aimAngle: this.state.aimAngle,
+        moveMode: this.state.moveMode,
+        health: this.state.health,
+        alive: this.state.alive,
+        respawnInMs: null,
+        weapon: this.state.weapon,
+        dev: { god: false, noSpread: false },
+      },
+      players: [
+        {
+          playerId: this.state.playerId,
+          team: this.state.team,
+          x: this.state.x,
+          y: this.state.y,
+          aimAngle: this.state.aimAngle,
+          moveMode: this.state.moveMode,
+          connected: true,
+          alive: this.state.alive,
+          activeSlot: this.state.weapon.activeSlot,
+          health: this.state.health,
+        },
+      ],
+      events: [],
     };
   }
 }

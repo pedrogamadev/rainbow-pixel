@@ -52,6 +52,23 @@ export class InterpolationBuffer {
     return this.snapshots.filter((snapshot) => snapshot.serverTimeMs > renderTimeMs).length;
   }
 
+  /**
+   * Instante que `sample(renderTimeMs)` de fato desenha: antes do primeiro snapshot, o primeiro;
+   * depois do último, no máximo o último mais a extrapolação permitida. `renderTimeMs` sem
+   * snapshot nenhum.
+   */
+  drawnTime(renderTimeMs: number): number {
+    const first = this.snapshots[0];
+    const newest = this.snapshots.at(-1);
+    if (first === undefined || newest === undefined) {
+      return renderTimeMs;
+    }
+    return Math.min(
+      Math.max(renderTimeMs, first.serverTimeMs),
+      newest.serverTimeMs + NET_CONFIG.maxExtrapolationMs,
+    );
+  }
+
   clear(): void {
     this.snapshots = [];
   }

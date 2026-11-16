@@ -6,6 +6,7 @@ import { ClientMessageType, QUICK_MATCH_ROOM_NAME, ServerMessageType } from '@ra
 import type {
   AddBotPayload,
   BotDifficultyId,
+  DevCommand,
   DevNetSettings,
   LobbyErrorPayload,
   MatchCountdownMessage,
@@ -436,6 +437,11 @@ export function forceStartMatch(): void {
 /** Ferramenta de teste: troca o simulador de lag deste cliente no servidor. */
 export function setDevNet(settings: DevNetSettings): void {
   activeRoom?.send(ClientMessageType.DevSetNet, settings);
+}
+
+/** Ferramenta de teste: teleporte, vida infinita ou dispersão zero para este jogador. */
+export function sendDevCommand(command: DevCommand): void {
+  activeRoom?.send(ClientMessageType.DevCommand, command);
 }
 
 export function dismissLobbyNotice(): void {

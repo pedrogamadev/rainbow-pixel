@@ -227,7 +227,14 @@ export function Lobby() {
 
   // A partida acontece na mesma sala: com a fase `match`, a tela vira a da partida.
   if (view.phase === 'match') {
-    return <Match view={view} reconnecting={reconnecting} onLeave={() => void leave()} />;
+    return (
+      <Match
+        view={view}
+        reconnecting={reconnecting}
+        notice={lobby.notice}
+        onLeave={() => void leave()}
+      />
+    );
   }
 
   return (
