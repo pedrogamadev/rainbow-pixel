@@ -19,7 +19,7 @@ function enqueue(state: InputQueueState, inputs: readonly unknown[], nowMs = 0):
 }
 
 function seqs(state: InputQueueState): number[] {
-  return state.queue.map((item) => item.seq);
+  return state.queue.map((item) => item.command.seq);
 }
 
 describe('parseInputCommand', () => {
@@ -141,6 +141,19 @@ describe('takeTickInput', () => {
     expect(applied.slice(NET_CONFIG.inputRepeatTicks)).toEqual([null, null]);
     // A repetição não confirma seq novo.
     expect(state.lastProcessedSeq).toBe(1);
+  });
+
+  it('guarda a hora de chegada de cada input', () => {
+    let state = enqueue(createInputQueue(), [input(1), input(2)], 1000);
+    state = enqueue(state, [input(3)], 1040);
+    expect(state.queue.map((item) => item.receivedAtMs)).toEqual([1000, 1000, 1040]);
+    const first = takeTickInput(state);
+    expect(first.receivedAtMs).toBe(1000);
+    const third = takeTickInput(takeTickInput(first.state).state);
+    expect(third.receivedAtMs).toBe(1040);
+    // A repetição leva a hora de chegada do input repetido.
+    expect(takeTickInput(third.state)).toMatchObject({ repeated: true, receivedAtMs: 1040 });
+    expect(takeTickInput(createInputQueue()).receivedAtMs).toBeNull();
   });
 
   it('marca o input repetido, que não vale como ação', () => {

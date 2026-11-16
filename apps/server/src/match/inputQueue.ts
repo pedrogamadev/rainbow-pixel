@@ -12,15 +12,26 @@
 import { NET_CONFIG, isMoveMode } from '@rainbow-pixel/shared';
 import type { InputCommand, MoveAxis } from '@rainbow-pixel/shared';
 
+/** Input aceito na fila, com a hora em que chegou ao servidor. */
+export interface QueuedInput {
+  readonly command: InputCommand;
+  /**
+   * Relógio do servidor (ms) quando a mensagem chegou: o `nowMs` de `enqueueInputs`. A
+   * compensação de lag mede a volta no tempo a partir daqui, não do tick em que o input é
+   * processado, para a espera na fila não comer o limite.
+   */
+  readonly receivedAtMs: number;
+}
+
 export interface InputQueueState {
   /** Inputs aceitos e ainda não processados, em ordem de seq. */
-  readonly queue: readonly InputCommand[];
+  readonly queue: readonly QueuedInput[];
   /** Maior seq já aceito. Chegando de novo, ou menor que ele, é descartado. */
   readonly lastReceivedSeq: number;
   /** Último seq processado: é o ackSeq do snapshot. 0 se nenhum. */
   readonly lastProcessedSeq: number;
   /** Último input aplicado, para repetir enquanto a fila está vazia. */
-  readonly lastInput: InputCommand | null;
+  readonly lastInput: QueuedInput | null;
   /** Ticks seguidos em que o último input foi repetido. */
   readonly repeatedTicks: number;
   /** Janela de 1 s do limite de taxa: início e inputs novos aceitos nela. */
@@ -112,7 +123,7 @@ export function enqueueInputs(
       continue;
     }
     rateWindowCount += 1;
-    queue.push(input);
+    queue.push({ command: input, receivedAtMs: nowMs });
     accepted += 1;
     if (queue.length > NET_CONFIG.inputQueueMax) {
       queue.shift();
@@ -131,6 +142,8 @@ export interface TickInput {
   readonly state: InputQueueState;
   /** Input a aplicar neste tick. `null`: o jogador fica parado. */
   readonly input: InputCommand | null;
+  /** Chegada do input ao servidor (na repetição, a do input repetido). `null` sem input. */
+  readonly receivedAtMs: number | null;
   /**
    * O input é a repetição do último, com a fila vazia: vale para movimento e mira, mas não
    * para ações (disparo, recarga e troca de arma).
@@ -146,22 +159,24 @@ export function takeTickInput(state: InputQueueState): TickInput {
       state: {
         ...state,
         queue: rest,
-        lastProcessedSeq: next.seq,
+        lastProcessedSeq: next.command.seq,
         lastInput: next,
         repeatedTicks: 0,
       },
-      input: next,
+      input: next.command,
+      receivedAtMs: next.receivedAtMs,
       repeated: false,
     };
   }
   if (state.lastInput !== null && state.repeatedTicks < NET_CONFIG.inputRepeatTicks) {
     return {
       state: { ...state, repeatedTicks: state.repeatedTicks + 1 },
-      input: state.lastInput,
+      input: state.lastInput.command,
+      receivedAtMs: state.lastInput.receivedAtMs,
       repeated: true,
     };
   }
-  return { state, input: null, repeated: false };
+  return { state, input: null, receivedAtMs: null, repeated: false };
 }
 
 /**
