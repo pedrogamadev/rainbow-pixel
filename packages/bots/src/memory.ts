@@ -3,8 +3,6 @@
  * decisão; quem guarda uma memória por bot é o servidor.
  */
 export interface BotMemory {
-  /** `seq` do próximo InputCommand. Cresce a cada decisão, como no cliente humano. */
-  nextSeq: number;
   /** Waypoint que o bot está buscando. `null` até a primeira decisão com waypoints. */
   waypointIndex: number | null;
   /** Tempo que falta parado no waypoint alcançado. */
@@ -19,7 +17,6 @@ export interface BotMemory {
 
 export function createBotMemory(): BotMemory {
   return {
-    nextSeq: 1,
     waypointIndex: null,
     pauseLeftMs: 0,
     bestDistance: Number.POSITIVE_INFINITY,

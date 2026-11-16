@@ -4,8 +4,8 @@
 // A dificuldade não muda nada neste nível.
 
 import { BOT_LEVEL0_CONFIG } from '@rainbow-pixel/shared';
-import type { InputCommand, MoveAxis, Vec2 } from '@rainbow-pixel/shared';
-import type { BotBrain } from '../BotBrain.js';
+import type { MoveAxis, Vec2 } from '@rainbow-pixel/shared';
+import type { BotBrain, BotIntent } from '../BotBrain.js';
 import type { PlayerView } from '../PlayerView.js';
 import type { BotMemory } from '../memory.js';
 
@@ -50,12 +50,9 @@ function setTarget(memory: BotMemory, index: number): void {
   memory.noProgressMs = 0;
 }
 
-function decide(view: PlayerView, memory: BotMemory, dtMs: number): InputCommand {
-  const seq = memory.nextSeq;
-  memory.nextSeq += 1;
+function decide(view: PlayerView, memory: BotMemory, dtMs: number): BotIntent {
   const { self, waypoints } = view;
-  const stand = (): InputCommand => ({
-    seq,
+  const stand = (): BotIntent => ({
     moveX: 0,
     moveY: 0,
     aimAngle: memory.aimAngle ?? self.aimAngle,
@@ -108,7 +105,7 @@ function decide(view: PlayerView, memory: BotMemory, dtMs: number): InputCommand
   const [moveX, moveY] = directionTowards(target.x - self.x, target.y - self.y);
   const aimAngle = Math.atan2(moveY, moveX);
   memory.aimAngle = aimAngle;
-  return { seq, moveX, moveY, aimAngle, moveMode: 'walk' };
+  return { moveX, moveY, aimAngle, moveMode: 'walk' };
 }
 
 export const level0Brain: BotBrain = { level: 0, decide };

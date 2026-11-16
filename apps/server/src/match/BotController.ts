@@ -1,10 +1,11 @@
-// Roda o cérebro de cada bot a BOT_LEVEL0_CONFIG.decisionRateHz. Os comandos vão para a mesma
-// fila de inputs dos humanos (em MatchSimulation), com as mesmas validações; nos ticks entre
-// duas decisões vale a regra de repetir o último input.
+// Roda o cérebro de cada bot a BOT_LEVEL0_CONFIG.decisionRateHz. O cérebro devolve uma intenção
+// sem seq (BotIntent); o controller numera e expande cada decisão em TICKS_PER_BOT_DECISION
+// inputs, um por tick, que vão para a mesma fila de inputs dos humanos (em MatchSimulation), com
+// as mesmas validações. Assim o bot não depende da regra de repetição da fila.
 // O cérebro só recebe a PlayerView: o próprio bot e a informação pública do mapa.
 
 import { createBotMemory, level0Brain } from '@rainbow-pixel/bots';
-import type { BotBrain, BotMemory, PlayerView } from '@rainbow-pixel/bots';
+import type { BotBrain, BotIntent, BotMemory, PlayerView } from '@rainbow-pixel/bots';
 import { BOT_LEVEL0_CONFIG, SIM_CONFIG } from '@rainbow-pixel/shared';
 import type { InputCommand, SimWorld, Vec2 } from '@rainbow-pixel/shared';
 
@@ -41,24 +42,41 @@ export function buildBotView(
   };
 }
 
+interface BotSlot {
+  readonly memory: BotMemory;
+  /** `seq` do próximo InputCommand. Cresce a cada tick, como no cliente humano. */
+  nextSeq: number;
+  /** Última decisão, repetida como um input novo em cada tick até a próxima. */
+  intent: BotIntent | null;
+}
+
 export class BotController {
-  private readonly memories = new Map<string, BotMemory>();
+  private readonly bots = new Map<string, BotSlot>();
   private readonly brain: BotBrain;
 
   constructor(private readonly options: BotControllerOptions) {
     this.brain = options.brain ?? level0Brain;
     for (const botId of options.botIds) {
-      this.memories.set(botId, createBotMemory());
+      this.bots.set(botId, { memory: createBotMemory(), nextSeq: 1, intent: null });
     }
   }
 
-  /** Decide o comando de cada bot. Chamado a cada TICKS_PER_BOT_DECISION ticks. */
-  decide(world: SimWorld): Map<string, InputCommand> {
+  /**
+   * Um input numerado por bot para o próximo tick. A cada TICKS_PER_BOT_DECISION ticks
+   * (começando no tick 0), o cérebro decide antes; nos outros ticks a última decisão vira um
+   * input novo, com seq próprio.
+   */
+  inputsForTick(world: SimWorld): Map<string, InputCommand> {
+    const decide = world.tick % TICKS_PER_BOT_DECISION === 0;
     const commands = new Map<string, InputCommand>();
-    for (const [botId, memory] of this.memories) {
-      const view = buildBotView(world, botId, this.options.mapId, this.options.waypoints);
-      if (view !== null) {
-        commands.set(botId, this.brain.decide(view, memory, DECISION_MS));
+    for (const [botId, bot] of this.bots) {
+      if (decide) {
+        const view = buildBotView(world, botId, this.options.mapId, this.options.waypoints);
+        bot.intent = view === null ? null : this.brain.decide(view, bot.memory, DECISION_MS);
+      }
+      if (bot.intent !== null) {
+        commands.set(botId, { ...bot.intent, seq: bot.nextSeq });
+        bot.nextSeq += 1;
       }
     }
     return commands;

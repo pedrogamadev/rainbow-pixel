@@ -19,7 +19,7 @@ import type {
   SnapshotMessage,
   TeamIndex,
 } from '@rainbow-pixel/shared';
-import { BotController, TICKS_PER_BOT_DECISION } from './BotController.js';
+import { BotController } from './BotController.js';
 import { createInputQueue, enqueueInputs, stopInputs, takeTickInput } from './inputQueue.js';
 import type { EnqueueResult, InputQueueState } from './inputQueue.js';
 import { buildSnapshot } from './snapshots.js';
@@ -128,10 +128,9 @@ export class MatchSimulation {
   }
 
   private step(): void {
-    if (this.world.tick % TICKS_PER_BOT_DECISION === 0) {
-      for (const [botId, command] of this.bots.decide(this.world)) {
-        this.enqueueInputs(botId, [command], this.serverTimeMs);
-      }
+    // Bots: um input por tick, enfileirado antes do consumo, então a fila deles nunca repete.
+    for (const [botId, command] of this.bots.inputsForTick(this.world)) {
+      this.enqueueInputs(botId, [command], this.serverTimeMs);
     }
     const inputs = new Map<string, MoveInput>();
     for (const [playerId, queue] of this.queues) {
