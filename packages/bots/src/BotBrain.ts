@@ -1,4 +1,4 @@
-import type { MoveInput } from '@rainbow-pixel/shared';
+import type { PlayerInput } from '@rainbow-pixel/shared';
 import type { PlayerView } from './PlayerView.js';
 import type { BotMemory } from './memory.js';
 
@@ -6,7 +6,7 @@ import type { BotMemory } from './memory.js';
  * O que o bot quer fazer até a próxima decisão: um input sem `seq`. Quem numera é o
  * BotController (servidor), que expande cada intenção em um input por tick.
  */
-export type BotIntent = MoveInput;
+export type BotIntent = PlayerInput;
 
 /**
  * Cérebro de um bot (escopo, seção 16.5). Recebe só a PlayerView, como um cliente humano, e
