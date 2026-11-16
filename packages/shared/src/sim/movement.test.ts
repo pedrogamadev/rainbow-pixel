@@ -2,11 +2,12 @@ import { describe, expect, it } from 'vitest';
 import { SIM_CONFIG } from '../config/index.js';
 import { TICK_SECONDS, stepPlayer } from './movement.js';
 import { openMap } from './testing/asciiMap.js';
+import { testInput, testPlayer } from './testing/fixtures.js';
 import type { MoveAxis, MoveInput, MoveMode, PlayerSimState } from './types.js';
 import { createWorld, stepWorld } from './world.js';
 
 const map = openMap(200, 200);
-const start: PlayerSimState = { playerId: 'p1', x: 800, y: 800, aimAngle: 0, moveMode: 'walk' };
+const start: PlayerSimState = testPlayer('p1', 800, 800);
 
 function move(moveX: MoveAxis, moveY: MoveAxis, moveMode: MoveMode = 'walk'): MoveInput {
   return { moveX, moveY, aimAngle: 0, moveMode };
@@ -72,9 +73,9 @@ describe('stepPlayer: sem input', () => {
   it('no mundo, jogador sem input no tick não se mexe', () => {
     const other: PlayerSimState = { ...start, playerId: 'p2', x: 400 };
     const world = createWorld(map, [start, other]);
-    const next = stepWorld(world, new Map([['p1', move(1, 0)]]), TICK_SECONDS);
+    const next = stepWorld(world, new Map([['p1', { input: testInput(move(1, 0)) }]])).world;
     expect(next.tick).toBe(1);
     expect(next.players[0]?.x).toBeGreaterThan(start.x);
-    expect(next.players[1]).toBe(other);
+    expect(next.players[1]).toEqual(other);
   });
 });

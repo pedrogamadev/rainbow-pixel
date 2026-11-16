@@ -1,29 +1,32 @@
 // Cenários do bot nível 0: situação montada -> comando esperado.
 
-import { BOT_LEVEL0_CONFIG, SIM_CONFIG, TICK_SECONDS, stepPlayer } from '@rainbow-pixel/shared';
-import type { CollisionMap, InputCommand, PlayerSimState, Vec2 } from '@rainbow-pixel/shared';
+import {
+  BOT_LEVEL0_CONFIG,
+  SIM_CONFIG,
+  TICK_SECONDS,
+  createPlayerState,
+  stepPlayer,
+} from '@rainbow-pixel/shared';
+import type { CollisionMap, PlayerSimState, Vec2 } from '@rainbow-pixel/shared';
 import { describe, expect, it } from 'vitest';
+import type { BotIntent } from '../BotBrain.js';
 import type { PlayerView } from '../PlayerView.js';
 import { directionTowards, level0Brain } from '../levels/level0.js';
 import { createBotMemory } from '../memory.js';
+import { botView } from '../testing/views.js';
 import type { BotMemory } from '../memory.js';
 
 const DECISION_MS = 1000 / BOT_LEVEL0_CONFIG.decisionRateHz;
 
 function view(self: Vec2, waypoints: readonly Vec2[], aimAngle = 0): PlayerView {
-  return {
-    tick: 0,
-    self: { playerId: 'bot:1', x: self.x, y: self.y, aimAngle },
-    mapId: 'teste',
-    waypoints,
-  };
+  return botView({ self: { x: self.x, y: self.y, aimAngle }, waypoints });
 }
 
-function decide(position: Vec2, waypoints: readonly Vec2[], memory: BotMemory): InputCommand {
+function decide(position: Vec2, waypoints: readonly Vec2[], memory: BotMemory): BotIntent {
   return level0Brain.decide(view(position, waypoints), memory, DECISION_MS);
 }
 
-function isStill(command: InputCommand): boolean {
+function isStill(command: BotIntent): boolean {
   return command.moveX === 0 && command.moveY === 0;
 }
 
@@ -65,10 +68,9 @@ describe('bot nível 0: anda em direção ao waypoint', () => {
     expect(command).toMatchObject({ moveX: 1, moveY: 1 });
   });
 
-  it('numera os comandos em ordem crescente', () => {
-    const memory = createBotMemory();
-    const seqs = [1, 2, 3].map(() => decide({ x: 0, y: 0 }, SQUARE, memory).seq);
-    expect(seqs).toEqual([1, 2, 3]);
+  it('devolve uma intenção sem seq: quem numera é o servidor', () => {
+    const intent = decide({ x: 0, y: 0 }, SQUARE, createBotMemory());
+    expect(intent).not.toHaveProperty('seq');
   });
 });
 
@@ -155,10 +157,10 @@ describe('bot nível 0 andando de verdade', () => {
 
   it('percorre o circuito na ordem, repetindo o input entre as decisões', () => {
     const memory = createBotMemory();
-    let state: PlayerSimState = { playerId: 'bot:1', x: 60, y: 60, aimAngle: 0, moveMode: 'walk' };
+    let state: PlayerSimState = createPlayerState({ playerId: 'bot:1', team: 0, x: 60, y: 60 });
     const ticksPerDecision = SIM_CONFIG.tickRate / BOT_LEVEL0_CONFIG.decisionRateHz;
     const visits: number[] = [];
-    let command: InputCommand | null = null;
+    let command: BotIntent | null = null;
     for (let tick = 0; tick < SIM_CONFIG.tickRate * 40; tick += 1) {
       if (tick % ticksPerDecision === 0) {
         command = level0Brain.decide(view(state, SQUARE, state.aimAngle), memory, DECISION_MS);

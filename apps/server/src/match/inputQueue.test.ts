@@ -11,7 +11,18 @@ import {
 import type { InputQueueState } from './inputQueue.js';
 
 function input(seq: number, overrides: Partial<InputCommand> = {}): InputCommand {
-  return { seq, moveX: 1, moveY: 0, aimAngle: 0, moveMode: 'walk', ...overrides };
+  return {
+    seq,
+    moveX: 1,
+    moveY: 0,
+    aimAngle: 0,
+    moveMode: 'walk',
+    fire: false,
+    reload: false,
+    weaponSlot: 'primary',
+    viewTimeMs: 1000,
+    ...overrides,
+  };
 }
 
 function enqueue(state: InputQueueState, inputs: readonly unknown[], nowMs = 0): InputQueueState {
@@ -19,7 +30,7 @@ function enqueue(state: InputQueueState, inputs: readonly unknown[], nowMs = 0):
 }
 
 function seqs(state: InputQueueState): number[] {
-  return state.queue.map((item) => item.seq);
+  return state.queue.map((item) => item.command.seq);
 }
 
 describe('parseInputCommand', () => {
@@ -51,6 +62,25 @@ describe('parseInputCommand', () => {
     expect(parseInputCommand({ ...input(1), seq: 1.5 })).toBeNull();
     expect(parseInputCommand(null)).toBeNull();
     expect(parseInputCommand('input')).toBeNull();
+  });
+
+  it('recusa o input inteiro com campo de arma ou viewTimeMs inválido', () => {
+    expect(parseInputCommand(input(1, { fire: true, reload: true }))).toMatchObject({
+      fire: true,
+      reload: true,
+    });
+    expect(parseInputCommand({ ...input(1), fire: 1 })).toBeNull();
+    expect(parseInputCommand({ ...input(1), fire: undefined })).toBeNull();
+    expect(parseInputCommand({ ...input(1), reload: 'sim' })).toBeNull();
+    expect(parseInputCommand({ ...input(1), weaponSlot: 'knife' })).toBeNull();
+    expect(parseInputCommand({ ...input(1), weaponSlot: undefined })).toBeNull();
+    expect(parseInputCommand({ ...input(1), viewTimeMs: Number.NaN })).toBeNull();
+    expect(parseInputCommand({ ...input(1), viewTimeMs: Infinity })).toBeNull();
+    expect(parseInputCommand({ ...input(1), viewTimeMs: '10' })).toBeNull();
+  });
+
+  it('não copia campos extras do cliente', () => {
+    expect(parseInputCommand({ ...input(1), damage: 999, playerId: 'outro' })).toEqual(input(1));
   });
 });
 
@@ -141,6 +171,31 @@ describe('takeTickInput', () => {
     expect(applied.slice(NET_CONFIG.inputRepeatTicks)).toEqual([null, null]);
     // A repetição não confirma seq novo.
     expect(state.lastProcessedSeq).toBe(1);
+  });
+
+  it('guarda a hora de chegada de cada input', () => {
+    let state = enqueue(createInputQueue(), [input(1), input(2)], 1000);
+    state = enqueue(state, [input(3)], 1040);
+    expect(state.queue.map((item) => item.receivedAtMs)).toEqual([1000, 1000, 1040]);
+    const first = takeTickInput(state);
+    expect(first.receivedAtMs).toBe(1000);
+    const third = takeTickInput(takeTickInput(first.state).state);
+    expect(third.receivedAtMs).toBe(1040);
+    // A repetição leva a hora de chegada do input repetido.
+    expect(takeTickInput(third.state)).toMatchObject({ repeated: true, receivedAtMs: 1040 });
+    expect(takeTickInput(createInputQueue()).receivedAtMs).toBeNull();
+  });
+
+  it('marca o input repetido, que não vale como ação', () => {
+    let state = enqueue(createInputQueue(), [input(1)]);
+    const real = takeTickInput(state);
+    expect(real.repeated).toBe(false);
+    state = real.state;
+    const repeated = takeTickInput(state);
+    expect(repeated.repeated).toBe(true);
+    expect(repeated.input?.seq).toBe(1);
+    state = enqueue(repeated.state, [input(2)]);
+    expect(takeTickInput(state).repeated).toBe(false);
   });
 
   it('um input novo depois da repetição volta a valer', () => {

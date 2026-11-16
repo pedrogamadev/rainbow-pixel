@@ -4,11 +4,12 @@ import {
   ClientMessageType,
   JoinErrorCode,
   LOBBY_ERROR_MESSAGES,
+  MATCH_EVENT_KINDS,
   MATCH_PHASES,
   QUICK_MATCH_ROOM_NAME,
   ServerMessageType,
-  TEAM_INDEXES,
 } from './index.js';
+import { TEAM_INDEXES } from '../sim/types.js';
 
 describe('protocolo da sala quick_match', () => {
   it('usa o nome de sala registrado no servidor', () => {
@@ -29,6 +30,7 @@ describe('protocolo da sala quick_match', () => {
       EndMatch: 'end_match',
       DevForceStart: 'dev_force_start',
       DevSetNet: 'dev_set_net',
+      DevCommand: 'dev_command',
     });
     expect(ServerMessageType).toEqual({
       LobbyError: 'lobby_error',
@@ -36,6 +38,10 @@ describe('protocolo da sala quick_match', () => {
       Pong: 'pong',
       MatchCountdown: 'match_countdown',
     });
+  });
+
+  it('tem os eventos de partida do marco 0.3', () => {
+    expect(MATCH_EVENT_KINDS).toEqual(['shot', 'hit_confirm', 'damage_taken', 'kill']);
   });
 
   it('tem as fases lobby e partida', () => {

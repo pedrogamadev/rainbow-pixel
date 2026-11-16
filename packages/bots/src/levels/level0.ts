@@ -3,11 +3,18 @@
 // chega mais perto do waypoint por 2 s, pula para o próximo. Sem waypoints, fica parado.
 // A dificuldade não muda nada neste nível.
 
-import { BOT_LEVEL0_CONFIG } from '@rainbow-pixel/shared';
-import type { InputCommand, MoveAxis, Vec2 } from '@rainbow-pixel/shared';
-import type { BotBrain } from '../BotBrain.js';
+import { BOT_LEVEL0_CONFIG, BOT_LEVEL1_CONFIG } from '@rainbow-pixel/shared';
+import type { MoveAxis, Vec2 } from '@rainbow-pixel/shared';
+import type { BotBrain, BotIntent } from '../BotBrain.js';
 import type { PlayerView } from '../PlayerView.js';
 import type { BotMemory } from '../memory.js';
+
+/** Sem tiro, sem recarga, com a arma dos bots (a primária, neste marco). */
+export const HOLD_FIRE = {
+  fire: false,
+  reload: false,
+  weaponSlot: BOT_LEVEL1_CONFIG.weaponSlot,
+} as const;
 
 /** As 8 direções do teclado, a partir do leste, no sentido horário (y cresce para baixo). */
 const DIRECTIONS: readonly (readonly [MoveAxis, MoveAxis])[] = [
@@ -50,16 +57,14 @@ function setTarget(memory: BotMemory, index: number): void {
   memory.noProgressMs = 0;
 }
 
-function decide(view: PlayerView, memory: BotMemory, dtMs: number): InputCommand {
-  const seq = memory.nextSeq;
-  memory.nextSeq += 1;
+function decide(view: PlayerView, memory: BotMemory, dtMs: number): BotIntent {
   const { self, waypoints } = view;
-  const stand = (): InputCommand => ({
-    seq,
+  const stand = (): BotIntent => ({
     moveX: 0,
     moveY: 0,
     aimAngle: memory.aimAngle ?? self.aimAngle,
     moveMode: 'walk',
+    ...HOLD_FIRE,
   });
 
   if (waypoints.length === 0) {
@@ -108,7 +113,7 @@ function decide(view: PlayerView, memory: BotMemory, dtMs: number): InputCommand
   const [moveX, moveY] = directionTowards(target.x - self.x, target.y - self.y);
   const aimAngle = Math.atan2(moveY, moveX);
   memory.aimAngle = aimAngle;
-  return { seq, moveX, moveY, aimAngle, moveMode: 'walk' };
+  return { moveX, moveY, aimAngle, moveMode: 'walk', ...HOLD_FIRE };
 }
 
 export const level0Brain: BotBrain = { level: 0, decide };

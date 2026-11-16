@@ -29,6 +29,7 @@ import { z } from 'zod';
 import { describeAuthFailure } from '../auth/verifyJwt.js';
 import type { VerifyJwt } from '../auth/verifyJwt.js';
 import type { ProfileStore } from '../db/profiles.js';
+import { handleDevCommand } from '../dev/devCommands.js';
 import { NetSimulator } from '../dev/netSimulator.js';
 import { MatchSimulation } from '../match/MatchSimulation.js';
 import {
@@ -85,7 +86,7 @@ export type QuickMatchRoomState = SchemaType<typeof QuickMatchRoomState>;
 // ---------------------------------------------------------------------------
 
 export interface DevToolsOptions {
-  /** DEV_TOOLS=true: início forçado e simulador de lag. */
+  /** DEV_TOOLS=true: início forçado, simulador de lag e comandos de debug. */
   readonly enabled: boolean;
   /** Valores iniciais do simulador de lag de cada cliente. */
   readonly netDefaults: DevNetSettings;
@@ -339,6 +340,19 @@ export class QuickMatchRoom extends Room<{ state: QuickMatchRoomState; client: R
       }
       this.net.setSettings(client.sessionId, payload.data);
     });
+
+    // Comandos de debug (teleporte, vida infinita, dispersão zero), sempre para quem envia.
+    this.onMessage<unknown>(ClientMessageType.DevCommand, (client, message) => {
+      const result = handleDevCommand({
+        devTools: this.devTools,
+        match: this.match,
+        playerId: client.sessionId,
+        payload: message,
+      });
+      if (!result.ok) {
+        this.sendLobbyError(client, result.error);
+      }
+    });
   }
 
   override onJoin(client: RoomClient, _options: unknown, auth: RoomAuth): void {
@@ -463,6 +477,7 @@ export class QuickMatchRoom extends Room<{ state: QuickMatchRoomState; client: R
         playerId: player.playerId,
         team: player.team,
         kind: player.kind,
+        ...(player.botDifficulty === '' ? {} : { botDifficulty: player.botDifficulty }),
       })),
       startMs: serverNow(),
     });

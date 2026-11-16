@@ -34,6 +34,14 @@ export function isGadgetId(id: string): id is GadgetId {
   return findById(GADGETS, id) !== undefined;
 }
 
+export function getWeapon(id: WeaponId): (typeof WEAPONS)[number] {
+  const weapon = findById(WEAPONS, id);
+  if (!weapon) {
+    throw new Error(`Arma desconhecida: ${id}`);
+  }
+  return weapon;
+}
+
 export function isBotDifficultyId(id: string): id is BotDifficultyId {
   return findById(BOT_DIFFICULTIES, id) !== undefined;
 }

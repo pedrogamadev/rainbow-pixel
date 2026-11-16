@@ -4,11 +4,21 @@ import { describe, expect, it } from 'vitest';
 import { InterpolationBuffer } from './interpolation.js';
 
 function player(playerId: string, x: number, y: number, aimAngle = 0): SnapshotPlayer {
-  return { playerId, x, y, aimAngle, moveMode: 'walk', connected: true };
+  return {
+    playerId,
+    team: 0,
+    x,
+    y,
+    aimAngle,
+    moveMode: 'walk',
+    connected: true,
+    alive: true,
+    activeSlot: 'primary',
+  };
 }
 
 function snapshot(serverTimeMs: number, players: SnapshotPlayer[]): SnapshotMessage {
-  return { tick: 0, serverTimeMs, ackSeq: 0, players };
+  return { tick: 0, serverTimeMs, ackSeq: 0, self: null, players, events: [] };
 }
 
 function at(buffer: InterpolationBuffer, renderTimeMs: number, playerId = 'b') {

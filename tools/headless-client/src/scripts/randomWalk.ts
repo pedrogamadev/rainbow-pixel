@@ -2,7 +2,7 @@ import { createSeededRandom } from '@rainbow-pixel/shared';
 import type { MoveInput, MoveMode } from '@rainbow-pixel/shared';
 import { idle } from './idle.js';
 import { DIRECTIONS, move } from './types.js';
-import type { InputScript } from './types.js';
+import type { MoveScript } from './types.js';
 
 const SEGMENT_MIN_TICKS = 10;
 const SEGMENT_MAX_TICKS = 45;
@@ -12,7 +12,7 @@ const MODES: readonly MoveMode[] = ['walk', 'walk', 'slow', 'run'];
  * Caminhada aleatória com semente fixa: trechos de 10 a 45 ticks, cada um numa direção (ou
  * parado) e num modo. Os trechos são gerados em ordem, então o tick N dá sempre o mesmo input.
  */
-export function randomWalk(seed: number): InputScript {
+export function randomWalk(seed: number): MoveScript {
   const random = createSeededRandom(seed);
   const segments: { readonly end: number; readonly input: MoveInput }[] = [];
   let end = 0;

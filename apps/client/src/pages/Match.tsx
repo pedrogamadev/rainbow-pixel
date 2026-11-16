@@ -2,18 +2,26 @@ import { useEffect, useMemo, useState } from 'react';
 import { GameCanvas } from '../game/GameCanvas';
 import type { GameHandle, PlayerInfo } from '../game/GameCanvas';
 import { DebugOverlay } from '../game/debug/DebugOverlay';
-import { endMatch, getGameSession } from '../lib/colyseus';
+import { MatchHud } from '../game/hud/MatchHud';
+import { dismissLobbyNotice, endMatch, getGameSession, sendDevCommand } from '../lib/colyseus';
 import { clientEnv } from '../lib/env';
 import type { LobbyView } from '../lib/lobbyView';
 
 interface MatchProps {
   readonly view: LobbyView;
   readonly reconnecting: boolean;
+  /** Último aviso do servidor para uma ação recusada (por exemplo, teleporte na parede). */
+  readonly notice: string | null;
   readonly onLeave: () => void;
 }
 
+/** Ferramenta de teste: só existe com VITE_DEV_TOOLS=true. */
+const teleport = clientEnv.devTools
+  ? (x: number, y: number) => sendDevCommand({ kind: 'teleport', x, y })
+  : undefined;
+
 /** Tela da partida: aberta enquanto a sala está na fase `match`. */
-export function Match({ view, reconnecting, onLeave }: MatchProps) {
+export function Match({ view, reconnecting, notice, onLeave }: MatchProps) {
   // A conexão de jogo é a mesma durante toda a partida, inclusive depois de reconectar.
   const [session] = useState(getGameSession);
   const [overlayOpen, setOverlayOpen] = useState(false);
@@ -22,11 +30,12 @@ export function Match({ view, reconnecting, onLeave }: MatchProps) {
   const players = useMemo(
     () =>
       new Map<string, PlayerInfo>(
-        view.players.map((player) => [
-          player.playerId,
-          { team: player.team, nickname: player.nickname },
-        ]),
+        view.players.map((player) => [player.playerId, { nickname: player.nickname }]),
       ),
+    [view.players],
+  );
+  const nicknames = useMemo(
+    () => new Map(view.players.map((player) => [player.playerId, player.nickname])),
     [view.players],
   );
 
@@ -66,6 +75,11 @@ export function Match({ view, reconnecting, onLeave }: MatchProps) {
           </span>
         )}
         {clientEnv.devTools && <span className="hint">F3: debug</span>}
+        {notice !== null && (
+          <button type="button" className="info notice" onClick={dismissLobbyNotice}>
+            {notice}
+          </button>
+        )}
         <span className="match-actions">
           {view.isHost && (
             <button type="button" onClick={endMatch}>
@@ -87,10 +101,12 @@ export function Match({ view, reconnecting, onLeave }: MatchProps) {
           players={players}
           showGhost={overlayOpen}
           onReady={setHandle}
+          {...(teleport === undefined ? {} : { onTeleport: teleport })}
         />
       )}
 
-      {overlayOpen && <DebugOverlay handle={handle} />}
+      <MatchHud handle={handle} nicknames={nicknames} />
+      {clientEnv.devTools && overlayOpen && <DebugOverlay handle={handle} />}
     </main>
   );
 }
