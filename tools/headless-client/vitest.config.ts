@@ -14,6 +14,8 @@ export default defineConfig({
         replacement: source('../../packages/shared/src/index.ts'),
       },
       { find: /^@rainbow-pixel\/maps$/, replacement: source('../../packages/maps/src/index.ts') },
+      // O teste de registro de acertos roda a partida do servidor em processo.
+      { find: /^@rainbow-pixel\/bots$/, replacement: source('../../packages/bots/src/index.ts') },
     ],
   },
   test: {

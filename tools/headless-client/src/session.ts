@@ -8,23 +8,27 @@ import {
   DEV_HEADLESS_CONFIG,
   QUICK_MATCH_ROOM_NAME,
   ServerMessageType,
+  TICK_MS,
 } from '@rainbow-pixel/shared';
 import type {
   AddBotPayload,
+  DevCommand,
   DevNetSettings,
   LobbyErrorPayload,
   MatchCountdownMessage,
   PongMessage,
   QuickMatchJoinOptions,
   QuickMatchState,
+  SnapshotMessage,
   TeamIndex,
+  WeaponSlot,
 } from '@rainbow-pixel/shared';
 import { GameClient } from '../../../apps/client/src/game/GameClient.js';
 import type { GameTransport } from '../../../apps/client/src/game/GameClient.js';
-import type { RoomMode } from './args.js';
+import type { DevCommandOptions, RoomMode } from './args.js';
 import { MetricsCollector } from './metrics.js';
 import type { MetricsLimits, MetricsSummary } from './metrics.js';
-import type { InputScript } from './scripts/index.js';
+import type { InputScript, StrafeAxis } from './scripts/index.js';
 
 export interface SessionOptions {
   readonly serverUrl: string;
@@ -32,6 +36,11 @@ export interface SessionOptions {
   readonly room: RoomMode;
   readonly script: InputScript;
   readonly durationSeconds: number;
+  readonly weapon: WeaponSlot;
+  readonly axis: StrafeAxis;
+  readonly fireIntervalMs: number;
+  /** Comandos de debug mandados quando a partida começa. */
+  readonly dev: DevCommandOptions;
   readonly net: DevNetSettings | null;
   readonly limits: MetricsLimits;
   /** Mensagens de andamento (stderr): o resumo em JSON fica sozinho no stdout. */
@@ -78,6 +87,30 @@ function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+/** Comandos de debug na ordem em que vão ao servidor. */
+export function devCommands(options: DevCommandOptions): DevCommand[] {
+  const commands: DevCommand[] = [];
+  if (options.teleport !== null) {
+    commands.push({ kind: 'teleport', ...options.teleport });
+  }
+  if (options.god) {
+    commands.push({ kind: 'god', enabled: true });
+  }
+  if (options.noSpread) {
+    commands.push({ kind: 'no_spread', enabled: true });
+  }
+  return commands;
+}
+
+/** Humanos prontos na sala. */
+function readyHumans(state: QuickMatchState | undefined): number {
+  let count = 0;
+  state?.players.forEach((player) => {
+    if (player.kind === 'human' && player.ready && player.connected) count += 1;
+  });
+  return count;
+}
+
 export async function runSession(options: SessionOptions): Promise<SessionResult> {
   const { log, room: mode } = options;
   const client = new Client(options.serverUrl);
@@ -115,19 +148,29 @@ export async function runSession(options: SessionOptions): Promise<SessionResult
       }
     }
     room.send(ClientMessageType.ToggleReady);
-    if (mode.kind === 'create' && !mode.wait) {
-      room.send(ClientMessageType.DevForceStart);
-    }
 
     const deadline = performance.now() + DEV_HEADLESS_CONFIG.matchWaitTimeoutSeconds * 1000;
+    let forced = false;
+    if (mode.kind === 'create' && !mode.wait && mode.humans > 1) {
+      log(`esperando ${mode.humans} humanos prontos (código ${room.roomId})`);
+    }
     while ((room.state as QuickMatchState | undefined)?.phase !== 'match') {
       if (left || performance.now() > deadline) {
         throw new Error('A partida não começou a tempo.');
+      }
+      // Host sem --wait: inicia assim que houver os humanos pedidos (--humans), prontos.
+      const humansReady = readyHumans(room.state as QuickMatchState | undefined);
+      if (mode.kind === 'create' && !mode.wait && !forced && humansReady >= mode.humans) {
+        forced = true;
+        room.send(ClientMessageType.DevForceStart);
       }
       await sleep(50);
     }
     const state = room.state as QuickMatchState;
     log(`partida no ${state.mapId}; roteiro por ${options.durationSeconds} s`);
+    for (const command of devCommands(options.dev)) {
+      room.send(ClientMessageType.DevCommand, command);
+    }
 
     const now = () => performance.now();
     const game = new GameClient({
@@ -136,9 +179,13 @@ export async function runSession(options: SessionOptions): Promise<SessionResult
       selfId: room.sessionId,
       now,
     });
+    const durationMs = options.durationSeconds * 1000;
     const metrics = new MetricsCollector();
+    const map = createCollisionGrid(getMap(state.mapId));
     game.onCorrection((correction) => metrics.correction(correction.errorPx));
-    hub.onMessage(ServerMessageType.Snapshot, () => metrics.snapshot(now()));
+    hub.onMessage(ServerMessageType.Snapshot, (payload) =>
+      metrics.snapshot(now(), payload as SnapshotMessage, room.sessionId),
+    );
     hub.onMessage(ServerMessageType.Pong, (payload) => {
       metrics.rtt(now() - (payload as PongMessage).clientTimeMs);
     });
@@ -147,7 +194,20 @@ export async function runSession(options: SessionOptions): Promise<SessionResult
     let tick = 0;
     const endedEarly = await new Promise<boolean>((resolve) => {
       const timer = setInterval(() => {
-        game.update(() => options.script(tick++));
+        game.update((self) => {
+          const current = tick;
+          tick += 1;
+          return options.script(current, {
+            elapsedMs: current * TICK_MS,
+            durationMs,
+            weaponSlot: options.weapon,
+            fireIntervalMs: options.fireIntervalMs,
+            axis: options.axis,
+            self,
+            others: () => game.renderOthers(),
+            map,
+          });
+        });
         metrics.frame(game.renderOthers());
         const finished = now() - startedAt >= options.durationSeconds * 1000;
         const interrupted = left || (room.state as QuickMatchState).phase !== 'match';
@@ -159,7 +219,7 @@ export async function runSession(options: SessionOptions): Promise<SessionResult
     });
     game.dispose();
 
-    const summary = metrics.summary((now() - startedAt) / 1000, options.limits);
+    const summary = metrics.summary((now() - startedAt) / 1000, options.limits, game.shotStats());
     return { code: room.roomId, playerId: room.sessionId, endedEarly, summary };
   } finally {
     if (!left) {
