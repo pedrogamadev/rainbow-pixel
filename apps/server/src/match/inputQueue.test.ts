@@ -11,7 +11,18 @@ import {
 import type { InputQueueState } from './inputQueue.js';
 
 function input(seq: number, overrides: Partial<InputCommand> = {}): InputCommand {
-  return { seq, moveX: 1, moveY: 0, aimAngle: 0, moveMode: 'walk', ...overrides };
+  return {
+    seq,
+    moveX: 1,
+    moveY: 0,
+    aimAngle: 0,
+    moveMode: 'walk',
+    fire: false,
+    reload: false,
+    weaponSlot: 'primary',
+    viewTimeMs: 1000,
+    ...overrides,
+  };
 }
 
 function enqueue(state: InputQueueState, inputs: readonly unknown[], nowMs = 0): InputQueueState {
@@ -51,6 +62,25 @@ describe('parseInputCommand', () => {
     expect(parseInputCommand({ ...input(1), seq: 1.5 })).toBeNull();
     expect(parseInputCommand(null)).toBeNull();
     expect(parseInputCommand('input')).toBeNull();
+  });
+
+  it('recusa o input inteiro com campo de arma ou viewTimeMs inválido', () => {
+    expect(parseInputCommand(input(1, { fire: true, reload: true }))).toMatchObject({
+      fire: true,
+      reload: true,
+    });
+    expect(parseInputCommand({ ...input(1), fire: 1 })).toBeNull();
+    expect(parseInputCommand({ ...input(1), fire: undefined })).toBeNull();
+    expect(parseInputCommand({ ...input(1), reload: 'sim' })).toBeNull();
+    expect(parseInputCommand({ ...input(1), weaponSlot: 'knife' })).toBeNull();
+    expect(parseInputCommand({ ...input(1), weaponSlot: undefined })).toBeNull();
+    expect(parseInputCommand({ ...input(1), viewTimeMs: Number.NaN })).toBeNull();
+    expect(parseInputCommand({ ...input(1), viewTimeMs: Infinity })).toBeNull();
+    expect(parseInputCommand({ ...input(1), viewTimeMs: '10' })).toBeNull();
+  });
+
+  it('não copia campos extras do cliente', () => {
+    expect(parseInputCommand({ ...input(1), damage: 999, playerId: 'outro' })).toEqual(input(1));
   });
 });
 

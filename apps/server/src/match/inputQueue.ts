@@ -1,6 +1,8 @@
 // Fila de inputs de um jogador, em funções puras. Humanos e bots passam pelas mesmas regras.
 // - descarta seq já recebido ou repetido (o cliente reenvia os últimos inputs contra perda);
 // - normaliza moveX e moveY para -1, 0 ou 1; recusa aimAngle não finito e moveMode desconhecido;
+// - recusa o input inteiro se fire ou reload não forem booleanos, weaponSlot não for primary ou
+//   secondary, ou viewTimeMs não for finito;
 // - guarda no máximo NET_CONFIG.inputQueueMax inputs (os mais antigos saem);
 // - descarta o que passar de NET_CONFIG.maxInputsPerSecond inputs novos por segundo.
 // A cada tick o jogador consome 1 input. Sem input na fila, o último se repete por até
@@ -9,7 +11,7 @@
 // não troca de arma). O gatilho pressionado continua o do último input real, para a detecção de
 // borda das armas semiautomáticas não gerar tiro extra quando o input real voltar.
 
-import { NET_CONFIG, isMoveMode } from '@rainbow-pixel/shared';
+import { NET_CONFIG, isMoveMode, isWeaponSlot } from '@rainbow-pixel/shared';
 import type { InputCommand, MoveAxis } from '@rainbow-pixel/shared';
 
 /** Input aceito na fila, com a hora em que chegou ao servidor. */
@@ -65,7 +67,8 @@ export function parseInputCommand(raw: unknown): InputCommand | null {
   if (typeof raw !== 'object' || raw === null) {
     return null;
   }
-  const { seq, moveX, moveY, aimAngle, moveMode } = raw as Record<string, unknown>;
+  const { seq, moveX, moveY, aimAngle, moveMode, fire, reload, weaponSlot, viewTimeMs } =
+    raw as Record<string, unknown>;
   if (typeof seq !== 'number' || !Number.isSafeInteger(seq) || seq < 1) {
     return null;
   }
@@ -75,7 +78,23 @@ export function parseInputCommand(raw: unknown): InputCommand | null {
   if (!isMoveMode(moveMode)) {
     return null;
   }
-  return { seq, moveX: normalizeAxis(moveX), moveY: normalizeAxis(moveY), aimAngle, moveMode };
+  if (typeof fire !== 'boolean' || typeof reload !== 'boolean' || !isWeaponSlot(weaponSlot)) {
+    return null;
+  }
+  if (typeof viewTimeMs !== 'number' || !Number.isFinite(viewTimeMs)) {
+    return null;
+  }
+  return {
+    seq,
+    moveX: normalizeAxis(moveX),
+    moveY: normalizeAxis(moveY),
+    aimAngle,
+    moveMode,
+    fire,
+    reload,
+    weaponSlot,
+    viewTimeMs,
+  };
 }
 
 export interface EnqueueResult {

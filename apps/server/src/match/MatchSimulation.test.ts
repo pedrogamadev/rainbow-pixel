@@ -1,3 +1,4 @@
+import { level0Brain } from '@rainbow-pixel/bots';
 import { createCollisionGrid, getMap, patrolWaypoints } from '@rainbow-pixel/maps';
 import {
   BOT_LEVEL0_CONFIG,
@@ -5,26 +6,26 @@ import {
   SIM_CONFIG,
   TICK_MS,
   circleOverlapsSolid,
+  hasLineOfSight,
 } from '@rainbow-pixel/shared';
 import type { InputCommand, PlayerSimState } from '@rainbow-pixel/shared';
 import { describe, expect, it } from 'vitest';
-import { buildBotView } from './BotController.js';
 import { MatchSimulation } from './MatchSimulation.js';
 import type { MatchPlayerSetup } from './MatchSimulation.js';
 
 const map = getMap('gym_01');
 const START = 1_000_000;
 
-/** 1 humano e 3 bots, como no critério de aceite 6. */
+/** 1 humano e 3 bots, como no critério de aceite 6 do marco 0.2. */
 const ONE_HUMAN_THREE_BOTS: readonly MatchPlayerSetup[] = [
   { playerId: 'ana', team: 0, kind: 'human' },
-  { playerId: 'bot:1', team: 1, kind: 'bot' },
-  { playerId: 'bot:2', team: 0, kind: 'bot' },
-  { playerId: 'bot:3', team: 1, kind: 'bot' },
+  { playerId: 'bot:1', team: 1, kind: 'bot', botDifficulty: 'easy' },
+  { playerId: 'bot:2', team: 0, kind: 'bot', botDifficulty: 'medium' },
+  { playerId: 'bot:3', team: 1, kind: 'bot', botDifficulty: 'hard' },
 ];
 
 function create(players: readonly MatchPlayerSetup[] = ONE_HUMAN_THREE_BOTS) {
-  return new MatchSimulation({ map, players, startMs: START });
+  return new MatchSimulation({ map, players, startMs: START, seed: 7 });
 }
 
 function player(sim: MatchSimulation, playerId: string): PlayerSimState {
@@ -39,7 +40,18 @@ function at(tick: number): number {
 }
 
 function input(seq: number, overrides: Partial<InputCommand> = {}): InputCommand {
-  return { seq, moveX: 1, moveY: 0, aimAngle: 0, moveMode: 'walk', ...overrides };
+  return {
+    seq,
+    moveX: 1,
+    moveY: 0,
+    aimAngle: 0,
+    moveMode: 'walk',
+    fire: false,
+    reload: false,
+    weaponSlot: 'primary',
+    viewTimeMs: START,
+    ...overrides,
+  };
 }
 
 describe('MatchSimulation: tick fixo', () => {
@@ -207,25 +219,16 @@ describe('MatchSimulation: conexão', () => {
 });
 
 describe('MatchSimulation: bots nível 0 no gym_01', () => {
-  it('a visão do bot tem só ele mesmo e os waypoints públicos do mapa', () => {
-    const sim = create();
-    const view = buildBotView(
-      { map: createCollisionGrid(map), tick: 7, players: sim.players },
-      'bot:1',
-      map.id,
-      patrolWaypoints(map),
-    );
-    expect(view).toEqual({
-      tick: 7,
-      self: { ...player(sim, 'bot:1'), moveMode: undefined, playerId: 'bot:1' },
-      mapId: 'gym_01',
-      waypoints: patrolWaypoints(map),
-    });
-    expect(JSON.stringify(view)).not.toContain('ana');
-  });
-
   it('1 humano e 3 bots: os bots patrulham o circuito por 5 minutos sem ficar parados mais de 5 s', () => {
-    const sim = create();
+    // O nível 0 (patrulha) é a base do nível 1 quando não há inimigo à vista. Aqui ele roda
+    // sozinho, para os bots dos dois times não pararem para trocar tiro.
+    const sim = new MatchSimulation({
+      map,
+      players: ONE_HUMAN_THREE_BOTS,
+      startMs: START,
+      seed: 7,
+      botBrain: level0Brain,
+    });
     const grid = createCollisionGrid(map);
     const waypoints = patrolWaypoints(map);
     const botIds = ['bot:1', 'bot:2', 'bot:3'];
@@ -271,5 +274,73 @@ describe('MatchSimulation: bots nível 0 no gym_01', () => {
     // O humano sem input fica no spawn.
     const spawn = map.objects.spawnAttack[0];
     expect(player(sim, 'ana')).toMatchObject({ x: spawn?.x, y: spawn?.y });
+  });
+});
+
+describe('MatchSimulation: bots nível 1 no gym_01', () => {
+  it('1 humano com god e 3 bots por 5 minutos: atiram nele à vista, nunca através de parede, e voltam a patrulhar', () => {
+    const sim = create();
+    sim.setGod('ana', true);
+    const grid = createCollisionGrid(map);
+    const waypoints = patrolWaypoints(map);
+    const botIds = ['bot:1', 'bot:2', 'bot:3'];
+    // A ana alterna a cada 15 s entre um waypoint do circuito (à vista de quem passa) e um
+    // canto do pátio oeste, fora do prédio e longe das portas.
+    const exposed = waypoints[4] ?? { x: 1040, y: 400 };
+    const hidden = { x: 40, y: 760 };
+    const phaseTicks = SIM_CONFIG.tickRate * 15;
+    let hitsOnAna = 0;
+    let botShots = 0;
+    const walkedWhileHidden = new Map(botIds.map((id) => [id, 0]));
+    let previous = new Map(sim.players.map((item) => [item.playerId, item]));
+
+    for (let tick = 1; tick <= SIM_CONFIG.tickRate * 60 * 5; tick += 1) {
+      const phaseTick = (tick - 1) % phaseTicks;
+      const isExposed = Math.floor((tick - 1) / phaseTicks) % 2 === 0;
+      if (phaseTick === 0) {
+        const spot = isExposed ? exposed : hidden;
+        expect(sim.teleport('ana', spot.x, spot.y)).toBe(true);
+      }
+      sim.advance(at(tick));
+      const ana = player(sim, 'ana');
+      for (const event of sim.snapshotFor('ana', () => true).events) {
+        if (event.tick !== sim.tick) continue;
+        if (event.kind === 'damage_taken') {
+          hitsOnAna += 1;
+          // Só leva tiro à vista, e quem acertou tinha a linha livre até ela.
+          expect(isExposed).toBe(true);
+          expect(hasLineOfSight(grid, event.origin, ana)).toBe(true);
+        }
+        if (event.kind === 'shot') {
+          botShots += 1;
+          // O raio para na face da primeira parede: o trecho até logo antes do fim é livre.
+          const length = Math.hypot(event.end.x - event.origin.x, event.end.y - event.origin.y);
+          const back = length === 0 ? 0 : 0.01 / length;
+          const beforeEnd = {
+            x: event.end.x - (event.end.x - event.origin.x) * back,
+            y: event.end.y - (event.end.y - event.origin.y) * back,
+          };
+          expect(hasLineOfSight(grid, event.origin, beforeEnd)).toBe(true);
+        }
+      }
+      for (const id of botIds) {
+        const bot = player(sim, id);
+        expect(circleOverlapsSolid(grid, bot.x, bot.y, SIM_CONFIG.playerRadius)).toBe(false);
+        const before = previous.get(id);
+        if (!isExposed && before !== undefined && before.alive && bot.alive) {
+          const step = Math.hypot(bot.x - before.x, bot.y - before.y);
+          walkedWhileHidden.set(id, (walkedWhileHidden.get(id) ?? 0) + step);
+        }
+      }
+      previous = new Map(sim.players.map((item) => [item.playerId, item]));
+    }
+    expect(botShots).toBeGreaterThan(0);
+    expect(hitsOnAna).toBeGreaterThan(0);
+    // Sem a ana à vista, os bots voltam a andar: bem mais que uma volta no circuito, somando as
+    // fases em que ela some.
+    for (const id of botIds) {
+      expect(walkedWhileHidden.get(id) ?? 0).toBeGreaterThan(2000);
+    }
+    expect(player(sim, 'ana')).toMatchObject({ alive: true, health: 100 });
   });
 });
