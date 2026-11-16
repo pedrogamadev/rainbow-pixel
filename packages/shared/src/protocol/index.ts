@@ -1,4 +1,5 @@
 import type { BotDifficultyId } from '../catalog/botDifficulties.js';
+import type { InputCommand, MoveMode } from '../sim/types.js';
 
 // ---------------------------------------------------------------------------
 // API REST
@@ -67,12 +68,22 @@ export interface SyncedMap<V> {
   forEach(callback: (value: V, key: string) => void): void;
 }
 
+export const MATCH_PHASES = ['lobby', 'match'] as const;
+
+/** A partida acontece na mesma sala do lobby, preservando código, host e reconexão. */
+export type MatchPhase = (typeof MATCH_PHASES)[number];
+
 export interface QuickMatchState {
   /** Código da sala, igual ao roomId. */
   readonly code: string;
   readonly hostSessionId: string;
   /** Jogadores por `playerId`. */
   readonly players: SyncedMap<LobbyPlayer>;
+  readonly phase: MatchPhase;
+  /** Mapa da partida. Vazio no lobby. */
+  readonly mapId: string;
+  /** Início da partida (ms desde 1970, relógio do servidor). 0 no lobby. */
+  readonly matchStartedAt: number;
 }
 
 // ---------------------------------------------------------------------------
@@ -94,6 +105,8 @@ export const JoinErrorCode = {
   ProfileNotFound: 403,
   AlreadyInRoom: 409,
   RoomFull: 423,
+  /** Durante a partida só entra quem retoma a própria vaga desconectada. */
+  MatchInProgress: 425,
 } as const;
 
 export type JoinErrorCode = (typeof JoinErrorCode)[keyof typeof JoinErrorCode];
@@ -102,6 +115,14 @@ export const ClientMessageType = {
   ToggleReady: 'toggle_ready',
   AddBot: 'add_bot',
   RemoveBot: 'remove_bot',
+  Input: 'input',
+  Ping: 'ping',
+  /** Somente o host. A sala volta para o lobby. */
+  EndMatch: 'end_match',
+  /** Somente o host e somente com DEV_TOOLS=true no servidor. */
+  DevForceStart: 'dev_force_start',
+  /** Somente com DEV_TOOLS=true no servidor. */
+  DevSetNet: 'dev_set_net',
 } as const;
 
 export interface AddBotPayload {
@@ -115,6 +136,9 @@ export interface RemoveBotPayload {
 
 export const ServerMessageType = {
   LobbyError: 'lobby_error',
+  Snapshot: 'snapshot',
+  Pong: 'pong',
+  MatchCountdown: 'match_countdown',
 } as const;
 
 export type LobbyErrorCode =
@@ -125,7 +149,9 @@ export type LobbyErrorCode =
   | 'bot_not_found'
   | 'player_not_found'
   | 'already_in_room'
-  | 'invalid_payload';
+  | 'invalid_payload'
+  | 'match_in_progress'
+  | 'dev_tools_disabled';
 
 export const LOBBY_ERROR_MESSAGES: Readonly<Record<LobbyErrorCode, string>> = {
   not_host: 'Somente o host pode fazer isso.',
@@ -136,9 +162,65 @@ export const LOBBY_ERROR_MESSAGES: Readonly<Record<LobbyErrorCode, string>> = {
   player_not_found: 'Jogador não encontrado.',
   already_in_room: 'Você já está nesta sala.',
   invalid_payload: 'Pedido inválido.',
+  match_in_progress: 'A partida já está em andamento.',
+  dev_tools_disabled: 'As ferramentas de teste estão desligadas no servidor.',
 };
 
 export interface LobbyErrorPayload {
   readonly code: LobbyErrorCode;
   readonly message: string;
+}
+
+// ---------------------------------------------------------------------------
+// Partida: mensagens de jogo (o estado do jogo não vai no schema da sala)
+// ---------------------------------------------------------------------------
+
+/** cliente -> servidor, a 30 Hz: os últimos inputs ainda não confirmados. */
+export interface InputMessage {
+  readonly inputs: readonly InputCommand[];
+}
+
+export interface SnapshotPlayer {
+  readonly playerId: string;
+  readonly x: number;
+  readonly y: number;
+  readonly aimAngle: number;
+  readonly moveMode: MoveMode;
+  readonly connected: boolean;
+}
+
+/** servidor -> cliente, a 20 Hz. Montado para cada cliente. */
+export interface SnapshotMessage {
+  readonly tick: number;
+  /** Instante do tick no relógio do servidor (ms desde 1970). */
+  readonly serverTimeMs: number;
+  /** Último `seq` de input deste cliente já processado pelo servidor. 0 se nenhum. */
+  readonly ackSeq: number;
+  readonly players: readonly SnapshotPlayer[];
+}
+
+/** cliente -> servidor, a cada 1 s. */
+export interface PingMessage {
+  /** Relógio do cliente, devolvido no pong. */
+  readonly clientTimeMs: number;
+}
+
+export interface PongMessage {
+  readonly clientTimeMs: number;
+  /** Relógio do servidor quando o pong saiu (ms desde 1970). */
+  readonly serverTimeMs: number;
+}
+
+/** servidor -> cliente, uma vez por segundo da contagem para iniciar a partida. */
+export interface MatchCountdownMessage {
+  /** Segundos até a partida começar. `null`: contagem cancelada. */
+  readonly secondsLeft: number | null;
+}
+
+/** Simulador de lag de um cliente (ferramenta de teste). */
+export interface DevNetSettings {
+  readonly latencyMs: number;
+  readonly jitterMs: number;
+  /** Perda de pacotes, de 0 a 100. */
+  readonly lossPct: number;
 }

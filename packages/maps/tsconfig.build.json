@@ -1,0 +1,13 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "types": [],
+    // A raiz é o pacote: os mapas de generated/ são copiados para dist/generated.
+    "rootDir": ".",
+    "outDir": "dist",
+    "declaration": true,
+    "sourceMap": true
+  },
+  "include": ["src"],
+  "exclude": ["src/**/*.test.ts"]
+}

@@ -1,0 +1,23 @@
+{
+  "name": "@rainbow-pixel/map-import",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Importador de mapas do Tiled (.tmj) para o formato MapDefinition de packages/maps.",
+  "type": "module",
+  "scripts": {
+    "import": "tsx --conditions=development src/index.ts",
+    "check": "tsx --conditions=development src/index.ts --check",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@rainbow-pixel/maps": "workspace:*",
+    "@rainbow-pixel/shared": "workspace:*",
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "@types/node": "^24.19.2",
+    "tsx": "^4.23.15",
+    "vitest": "^5.1.0"
+  }
+}

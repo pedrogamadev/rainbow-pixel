@@ -1,0 +1,29 @@
+{
+  "name": "@rainbow-pixel/bots",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Cérebro dos bots em TypeScript puro: recebe a PlayerView e devolve um InputCommand.",
+  "type": "module",
+  "sideEffects": false,
+  "exports": {
+    ".": {
+      "development": "./src/index.ts",
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@rainbow-pixel/shared": "workspace:*"
+  },
+  "devDependencies": {
+    "vitest": "^5.1.0"
+  }
+}

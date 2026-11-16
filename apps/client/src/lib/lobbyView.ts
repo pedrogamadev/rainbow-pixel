@@ -4,6 +4,7 @@ import { MATCH_CONFIG, TEAM_INDEXES } from '@rainbow-pixel/shared';
 import type {
   BotDifficultyId,
   LobbyPlayerKind,
+  MatchPhase,
   QuickMatchState,
   TeamIndex,
 } from '@rainbow-pixel/shared';
@@ -32,11 +33,16 @@ export interface LobbyTeamView {
 export interface LobbyView {
   readonly code: string;
   readonly teams: readonly LobbyTeamView[];
+  /** Todos os jogadores, na ordem de entrada. */
+  readonly players: readonly LobbyPlayerView[];
   /** Humanos e bots na sala. */
   readonly playerCount: number;
   /** O jogador desta aba. `null` enquanto o estado ainda não o inclui. */
   readonly self: LobbyPlayerView | null;
   readonly isHost: boolean;
+  readonly phase: MatchPhase;
+  /** Mapa da partida. Vazio no lobby. */
+  readonly mapId: string;
 }
 
 export function toLobbyView(state: QuickMatchState, selfSessionId: string): LobbyView {
@@ -66,8 +72,11 @@ export function toLobbyView(state: QuickMatchState, selfSessionId: string): Lobb
   return {
     code: state.code,
     teams,
+    players,
     playerCount: players.length,
     self,
     isHost: self?.isHost ?? false,
+    phase: state.phase === 'match' ? 'match' : 'lobby',
+    mapId: state.mapId,
   };
 }

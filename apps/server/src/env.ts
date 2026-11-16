@@ -1,4 +1,5 @@
 import { existsSync } from 'node:fs';
+import { DEV_NET_SIMULATOR_CONFIG } from '@rainbow-pixel/shared';
 import { z } from 'zod';
 
 /** Variável vazia no .env conta como ausente. */
@@ -12,6 +13,11 @@ function optionalString() {
 
 function requiredString(name: string) {
   return z.preprocess(emptyToUndefined, z.string({ error: `${name} é obrigatória.` }).trim());
+}
+
+/** Número de 0 a `max`, com 0 quando ausente. */
+function devNetNumber(max: number) {
+  return z.preprocess(emptyToUndefined, z.coerce.number().min(0).max(max).default(0));
 }
 
 function requiredUrl(name: string) {
@@ -56,6 +62,10 @@ const envSchema = z
         .default('false')
         .transform((value) => value === 'true'),
     ),
+    /** Valores iniciais do simulador de lag de cada cliente (só com DEV_TOOLS=true). */
+    DEV_NET_LATENCY_MS: devNetNumber(DEV_NET_SIMULATOR_CONFIG.maxLatencyMs),
+    DEV_NET_JITTER_MS: devNetNumber(DEV_NET_SIMULATOR_CONFIG.maxJitterMs),
+    DEV_NET_LOSS_PCT: devNetNumber(DEV_NET_SIMULATOR_CONFIG.maxLossPct),
   })
   .superRefine((env, ctx) => {
     if (env.AUTH_JWT_MODE === 'secret' && env.SUPABASE_JWT_SECRET === undefined) {

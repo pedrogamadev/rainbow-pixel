@@ -5,14 +5,17 @@ import {
   addBot,
   addHuman,
   countBots,
+  countConnectedHumans,
   countHumans,
   countTeam,
   createLobby,
+  endMatch,
   findPlayer,
   isReadyToStart,
   removeBot,
   removePlayer,
   setConnected,
+  startMatch,
   toggleReady,
 } from './lobbySlots.js';
 import type { LobbyState } from './lobbySlots.js';
@@ -128,12 +131,12 @@ describe('addHuman', () => {
     expect(result).toEqual({ ok: false, error: 'already_in_room' });
   });
 
-  it('recusa o mesmo usuário mesmo com a vaga antiga desconectada', () => {
-    const lobby = setConnected(join(createLobby(), 'ana'), 'session-ana', false);
+  it('recusa a mesma sessão duas vezes', () => {
+    const lobby = join(createLobby(), 'ana');
     const result = addHuman(lobby, {
-      sessionId: 'session-outra-aba',
-      profileId: 'profile-ana',
-      nickname: 'ana',
+      sessionId: 'session-ana',
+      profileId: 'profile-outro',
+      nickname: 'outro',
     });
     expect(result).toEqual({ ok: false, error: 'already_in_room' });
   });
@@ -152,6 +155,96 @@ describe('addHuman', () => {
     const before = join(createLobby(), 'ana');
     const snapshot = structuredClone(before);
     join(before, 'bia');
+    expect(before).toEqual(snapshot);
+  });
+});
+
+describe('retomada de vaga desconectada', () => {
+  function otherTab(lobby: LobbyState, name: string) {
+    return addHuman(lobby, {
+      sessionId: `session-${name}-nova-aba`,
+      profileId: `profile-${name}`,
+      nickname: name,
+    });
+  }
+
+  it('a nova aba do mesmo perfil assume a vaga, com o mesmo time e o mesmo pronto', () => {
+    let lobby = join(join(createLobby(), 'ana'), 'bia');
+    lobby = ready(lobby, 'bia');
+    lobby = setConnected(lobby, 'session-bia', false);
+
+    const result = otherTab(lobby, 'bia');
+    if (!result.ok) throw new Error(result.error);
+
+    expect(result.resumedPlayerId).toBe('session-bia');
+    expect(result.replacedBotId).toBeNull();
+    expect(findPlayer(result.lobby, 'session-bia')).toBeUndefined();
+    expect(findPlayer(result.lobby, 'session-bia-nova-aba')).toMatchObject({
+      kind: 'human',
+      profileId: 'profile-bia',
+      team: 1,
+      ready: true,
+      connected: true,
+    });
+    expect(result.lobby.players).toHaveLength(2);
+  });
+
+  it('mantém a posição na ordem de entrada', () => {
+    let lobby = join(join(join(createLobby(), 'ana'), 'bia'), 'caio');
+    lobby = setConnected(lobby, 'session-bia', false);
+    const result = otherTab(lobby, 'bia');
+    if (!result.ok) throw new Error(result.error);
+    expect(result.lobby.players.map((player) => player.playerId)).toEqual([
+      'session-ana',
+      'session-bia-nova-aba',
+      'session-caio',
+    ]);
+  });
+
+  it('a vaga do host continua sendo do host', () => {
+    let lobby = join(join(createLobby(), 'ana'), 'bia');
+    lobby = setConnected(lobby, 'session-ana', false);
+    const result = otherTab(lobby, 'ana');
+    if (!result.ok) throw new Error(result.error);
+    expect(result.lobby.hostSessionId).toBe('session-ana-nova-aba');
+  });
+
+  it('não muda o host quando a vaga retomada não era do host', () => {
+    let lobby = join(join(createLobby(), 'ana'), 'bia');
+    lobby = setConnected(lobby, 'session-bia', false);
+    const result = otherTab(lobby, 'bia');
+    if (!result.ok) throw new Error(result.error);
+    expect(result.lobby.hostSessionId).toBe('session-ana');
+  });
+
+  it('em sala cheia com bots, retoma a vaga sem tirar bot', () => {
+    const lobby = setConnected(fullWithBots(), 'session-ana', false);
+    const result = otherTab(lobby, 'ana');
+    if (!result.ok) throw new Error(result.error);
+    expect(result.replacedBotId).toBeNull();
+    expect(countBots(result.lobby)).toBe(3);
+    expect(result.lobby.players).toHaveLength(4);
+  });
+
+  it('em sala cheia de humanos, retoma a vaga', () => {
+    let lobby = createLobby();
+    for (const name of ['ana', 'bia', 'caio', 'davi']) {
+      lobby = join(lobby, name);
+    }
+    lobby = setConnected(lobby, 'session-davi', false);
+    const result = otherTab(lobby, 'davi');
+    expect(result.ok).toBe(true);
+  });
+
+  it('continua recusando quando a vaga existente está conectada', () => {
+    const lobby = join(createLobby(), 'ana');
+    expect(otherTab(lobby, 'ana')).toEqual({ ok: false, error: 'already_in_room' });
+  });
+
+  it('não altera o lobby recebido', () => {
+    const before = setConnected(join(createLobby(), 'ana'), 'session-ana', false);
+    const snapshot = structuredClone(before);
+    otherTab(before, 'ana');
     expect(before).toEqual(snapshot);
   });
 });
@@ -499,5 +592,87 @@ describe('isReadyToStart', () => {
       lobby = ready(join(lobby, name), name);
     }
     expect(isReadyToStart(lobby)).toBe(true);
+  });
+});
+
+describe('fases da sala', () => {
+  /** 1 humano e 3 bots, todos prontos, já em partida. */
+  function inMatch(): LobbyState {
+    return startMatch(ready(fullWithBots(), 'ana'));
+  }
+
+  it('começa no lobby', () => {
+    expect(createLobby().phase).toBe('lobby');
+  });
+
+  it('iniciar a partida não mexe nas vagas', () => {
+    const before = ready(fullWithBots(), 'ana');
+    const after = startMatch(before);
+    expect(after.phase).toBe('match');
+    expect(after.players).toEqual(before.players);
+    expect(after.hostSessionId).toBe(before.hostSessionId);
+    expect(isReadyToStart(after)).toBe(false);
+  });
+
+  it('durante a partida, recusa humano novo, mesmo com vaga livre ou bot para substituir', () => {
+    const withBots = inMatch();
+    const withFreeSlot = startMatch(join(createLobby(), 'ana'));
+    for (const lobby of [withBots, withFreeSlot]) {
+      const result = addHuman(lobby, {
+        sessionId: 'session-bia',
+        profileId: 'profile-bia',
+        nickname: 'bia',
+      });
+      expect(result).toEqual({ ok: false, error: 'match_in_progress' });
+    }
+  });
+
+  it('durante a partida, deixa a mesma conta retomar a vaga desconectada', () => {
+    const lobby = setConnected(inMatch(), 'session-ana', false);
+    const result = addHuman(lobby, {
+      sessionId: 'session-ana-nova-aba',
+      profileId: 'profile-ana',
+      nickname: 'ana',
+    });
+    if (!result.ok) throw new Error(result.error);
+    expect(result.resumedPlayerId).toBe('session-ana');
+    expect(result.lobby.phase).toBe('match');
+    expect(result.lobby.hostSessionId).toBe('session-ana-nova-aba');
+  });
+
+  it('durante a partida, não adiciona nem remove bot', () => {
+    const lobby = removeBot(inMatch(), 'session-ana', 'bot:1');
+    expect(lobby).toEqual({ ok: false, error: 'match_in_progress' });
+    const withFreeSlot = startMatch(join(createLobby(), 'ana'));
+    expect(addBot(withFreeSlot, 'session-ana', { team: 1, difficulty: 'easy' })).toEqual({
+      ok: false,
+      error: 'match_in_progress',
+    });
+  });
+
+  it('durante a partida, ignora o pronto', () => {
+    const lobby = inMatch();
+    const result = toggleReady(lobby, 'session-ana');
+    expect(result).toEqual({ ok: true, lobby });
+  });
+
+  it('ao voltar para o lobby, humanos ficam não prontos e bots continuam prontos', () => {
+    let lobby = join(ready(fullWithBots(), 'ana'), 'bia');
+    lobby = ready(lobby, 'bia');
+    const back = endMatch(startMatch(lobby));
+    expect(back.phase).toBe('lobby');
+    for (const player of back.players) {
+      expect(player.ready).toBe(player.kind === 'bot');
+    }
+    expect(back.players.map((player) => player.playerId)).toEqual(
+      lobby.players.map((player) => player.playerId),
+    );
+  });
+
+  it('conta os humanos conectados', () => {
+    let lobby = join(join(fullWithBots(), 'bia'), 'caio');
+    expect(countConnectedHumans(lobby)).toBe(3);
+    lobby = setConnected(lobby, 'session-bia', false);
+    expect(countConnectedHumans(lobby)).toBe(2);
   });
 });

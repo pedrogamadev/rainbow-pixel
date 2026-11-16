@@ -68,5 +68,9 @@ jobs:
       - name: Migrations (prisma migrate deploy)
         run: pnpm db:deploy
 
+      # Valida os mapas do Tiled e confere se packages/maps/generated está atualizado.
+      - name: Mapas (pnpm maps:check)
+        run: pnpm maps:check
+
       - name: Build
         run: pnpm build

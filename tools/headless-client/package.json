@@ -1,0 +1,23 @@
+{
+  "name": "@rainbow-pixel/headless-client",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Cliente sem tela para testes (ferramenta de teste, seção 17 do escopo). Só roda com DEV_TOOLS=true.",
+  "type": "module",
+  "scripts": {
+    "start": "tsx --conditions=development src/index.ts",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@colyseus/sdk": "^0.18.10",
+    "@rainbow-pixel/maps": "workspace:*",
+    "@rainbow-pixel/shared": "workspace:*",
+    "@supabase/supabase-js": "^2.119.0"
+  },
+  "devDependencies": {
+    "@types/node": "^24.19.2",
+    "tsx": "^4.23.15",
+    "vitest": "^5.1.0"
+  }
+}

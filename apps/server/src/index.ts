@@ -45,7 +45,18 @@ const verifyJwt = createSupabaseJwtVerifier({
   jwtSecret: env.SUPABASE_JWT_SECRET,
 });
 
-configureQuickMatchRoom({ verifyJwt, profiles });
+configureQuickMatchRoom({
+  verifyJwt,
+  profiles,
+  devTools: {
+    enabled: env.DEV_TOOLS,
+    netDefaults: {
+      latencyMs: env.DEV_NET_LATENCY_MS,
+      jitterMs: env.DEV_NET_JITTER_MS,
+      lossPct: env.DEV_NET_LOSS_PCT,
+    },
+  },
+});
 restrictCors(env.CORS_ORIGINS);
 // Erros de matchmaking saem com status HTTP comum (401, 404...) em vez de 520 a 526,
 // faixa que o Cloudflare reserva e troca por uma página própria no túnel.

@@ -4,6 +4,7 @@ import {
   ClientMessageType,
   JoinErrorCode,
   LOBBY_ERROR_MESSAGES,
+  MATCH_PHASES,
   QUICK_MATCH_ROOM_NAME,
   ServerMessageType,
   TEAM_INDEXES,
@@ -18,13 +19,27 @@ describe('protocolo da sala quick_match', () => {
     expect(TEAM_INDEXES).toHaveLength(MATCH_CONFIG.teamCount);
   });
 
-  it('usa os nomes de mensagem do marco', () => {
+  it('usa os nomes de mensagem dos marcos', () => {
     expect(ClientMessageType).toEqual({
       ToggleReady: 'toggle_ready',
       AddBot: 'add_bot',
       RemoveBot: 'remove_bot',
+      Input: 'input',
+      Ping: 'ping',
+      EndMatch: 'end_match',
+      DevForceStart: 'dev_force_start',
+      DevSetNet: 'dev_set_net',
     });
-    expect(ServerMessageType.LobbyError).toBe('lobby_error');
+    expect(ServerMessageType).toEqual({
+      LobbyError: 'lobby_error',
+      Snapshot: 'snapshot',
+      Pong: 'pong',
+      MatchCountdown: 'match_countdown',
+    });
+  });
+
+  it('tem as fases lobby e partida', () => {
+    expect(MATCH_PHASES).toEqual(['lobby', 'match']);
   });
 
   it('não repete códigos de erro de entrada', () => {

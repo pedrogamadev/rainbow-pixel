@@ -27,8 +27,12 @@ function bot(nickname: string, team: 0 | 1): LobbyPlayer {
   };
 }
 
-function stateOf(hostSessionId: string, players: [string, LobbyPlayer][]): QuickMatchState {
-  return { code: 'ABC234', hostSessionId, players: new Map(players) };
+function stateOf(
+  hostSessionId: string,
+  players: [string, LobbyPlayer][],
+  match: Pick<QuickMatchState, 'phase' | 'mapId'> = { phase: 'lobby', mapId: '' },
+): QuickMatchState {
+  return { code: 'ABC234', hostSessionId, players: new Map(players), matchStartedAt: 0, ...match };
 }
 
 describe('toLobbyView', () => {
@@ -108,5 +112,16 @@ describe('toLobbyView', () => {
     expect(view.isHost).toBe(false);
     expect(view.playerCount).toBe(0);
     expect(view.teams.every((team) => team.slots.every((slot) => slot === null))).toBe(true);
+  });
+
+  it('repassa a fase e o mapa da partida', () => {
+    const lobby = toLobbyView(stateOf('s1', [['s1', human('ana', 0)]]), 's1');
+    expect(lobby).toMatchObject({ phase: 'lobby', mapId: '' });
+    const match = toLobbyView(
+      stateOf('s1', [['s1', human('ana', 0)]], { phase: 'match', mapId: 'gym_01' }),
+      's1',
+    );
+    expect(match).toMatchObject({ phase: 'match', mapId: 'gym_01' });
+    expect(match.players.map((player) => player.nickname)).toEqual(['ana']);
   });
 });
