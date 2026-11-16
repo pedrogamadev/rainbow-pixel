@@ -2,7 +2,7 @@
 
 Jogo de tiro tático 2D multiplayer no navegador. Partidas 2v2 com paredes destrutíveis, drones, câmeras e som posicional. Bots completam a sala quando faltam jogadores.
 
-Status: em desenvolvimento, marco 0.2 (Movimento). Além do login, perfil, sala por código e lobby com bots do marco 0.1, a sala já vira partida: os 4 jogadores (humanos ou bots) andam no mapa de teste `gym_01`, com servidor autoritativo a 30 Hz, previsão e reconciliação do próprio movimento e interpolação dos outros. Ainda não há tiro.
+Status: em desenvolvimento, marco 0.3 (Tiro). Além do login, perfil, sala por código e lobby com bots do marco 0.1 e do movimento em rede do marco 0.2, os jogadores atiram, causam dano, morrem e renascem: hitscan calculado no servidor com recuo, dispersão, queda de dano e compensação de lag, M4A1 e M9 para todos, e bots nível 1 que atiram só em quem veem. Ainda não há destruição de parede, fog of war nem rounds.
 
 ## Stack
 
@@ -109,7 +109,9 @@ Crie uma conta, escolha um nickname e use "Criar sala" ou "Entrar com código".
 
 Com a sala fechada em 2v2 e todos prontos, o servidor conta 3 segundos e a partida começa na mesma sala, no mapa `gym_01`. O host encerra pelo botão "Encerrar partida" e todos voltam ao lobby, não prontos (bots continuam prontos). Se todos os humanos ficarem desconectados, a sala também volta ao lobby.
 
-Controles: WASD move, Shift anda lento, Ctrl corre e o mouse mira. Durante a partida, fechar ou recarregar a aba pede confirmação, porque Ctrl+W fecha a aba e o navegador não deixa o jogo impedir.
+Controles: WASD move, Shift anda lento, Ctrl corre (sem atirar, mirando para onde corre), o mouse mira, o botão esquerdo atira (segure para a M4A1), R recarrega e 1 e 2 trocam entre a M4A1 e a M9. Durante a partida, fechar ou recarregar a aba pede confirmação, porque Ctrl+W fecha a aba e o navegador não deixa o jogo impedir.
+
+Combate deste marco: vida 100, sem regeneração; M4A1 (32 de dano, 750 RPM, 30 balas) e M9 (30 de dano, 450 RPM semiautomática, 15 balas), com o dano caindo até 60% entre o alcance e o dobro dele; fogo amigo a 50%. Quem morre fica parado como corpo por 3 s e renasce no próprio spawn com vida e pentes cheios (regra temporária até os rounds do marco 0.6). O HUD mínimo mostra vida, arma, munição, barras de recarga e troca, os últimos abates e a contagem até renascer.
 
 ## Scripts
 
@@ -156,7 +158,7 @@ Com `VITE_DEV_TOOLS=true`, a sessão fica no `sessionStorage`, então cada aba t
 
 ### Bots no lobby
 
-O host vê "Adicionar bot", com seletor de dificuldade, em cada vaga livre, e "Remover" em cada bot. Um humano que entra numa sala completa com bots substitui o bot adicionado por último. Na partida, o bot nível 0 patrulha os waypoints do mapa em circuito, parando 1 s em cada um (a dificuldade ainda não muda nada).
+O host vê "Adicionar bot", com seletor de dificuldade, em cada vaga livre, e "Remover" em cada bot. Um humano que entra numa sala completa com bots substitui o bot adicionado por último. Na partida, o bot nível 1 patrulha os waypoints do mapa em circuito e, ao ver um inimigo (cone de 100° até 900 px, ou a até 48 px, sem parede no caminho), para, gira a mira e atira depois do tempo de reação, com erro de mira e rajadas conforme a dificuldade. Detalhes em [packages/bots/README.md](packages/bots/README.md).
 
 ### Início forçado
 
@@ -166,16 +168,24 @@ Com `DEV_TOOLS=true` no servidor e `VITE_DEV_TOOLS=true` no cliente, o host vê 
 
 O servidor aplica atraso, variação e perda às mensagens de input recebidas e às de snapshot e pong enviadas, por cliente. Os valores iniciais vêm de `DEV_NET_LATENCY_MS`, `DEV_NET_JITTER_MS` e `DEV_NET_LOSS_PCT`.
 
-Na partida, F3 abre o overlay de debug (só com `VITE_DEV_TOOLS=true`): FPS, RTT, tick do servidor, buffer de interpolação, inputs pendentes, correções por segundo e tamanho da última correção. O círculo verde é a posição confirmada pelo servidor, desenhada sobre a prevista. O overlay também troca o atraso, a variação e a perda deste cliente.
+Na partida, F3 abre o overlay de debug (só com `VITE_DEV_TOOLS=true`): FPS, RTT, tick do servidor, buffer de interpolação, inputs pendentes, correções por segundo e tamanho da última correção. O círculo verde é a posição confirmada pelo servidor, desenhada sobre a prevista. O overlay também troca o atraso, a variação e a perda deste cliente e mostra as métricas de tiro: volta no tempo estimada, disparos, acertos previstos pelo raio local, acertos confirmados pelo servidor e a razão entre eles.
+
+### Comandos de debug
+
+Com `DEV_TOOLS=true` no servidor, a mensagem `dev_command` aplica a quem envia: teleporte (`teleport`, recusado dentro de parede), vida infinita (`god`: o dano é calculado e confirmado, mas não desconta vida) e dispersão zero (`no_spread`: o recuo continua). No overlay (F3) há botões para `god` e `no_spread`, e a tecla T teleporta para o ponto sob o mouse. Com `DEV_TOOLS=false`, o servidor recusa com `dev_tools_disabled`.
 
 ### Cliente headless
 
-`pnpm headless` entra na sala com uma conta de teste, roda um roteiro de inputs (`idle`, `circle`, `square`, `random-walk`) com a mesma previsão do cliente web e imprime um resumo em JSON. Configure `tools/headless-client/.env` (modelo em `.env.example`) e veja as opções em [tools/headless-client/README.md](tools/headless-client/README.md). Exemplos:
+`pnpm headless` entra na sala com uma conta de teste, roda um roteiro de inputs (`idle`, `circle`, `square`, `random-walk`, `strafe`, `aim-test`) com a mesma previsão do cliente web e imprime um resumo em JSON, com as métricas de tiro (`shotsFired`, `localHits`, `confirmedHits`, `hitRegRatio`, `averageRewindMs`). Configure `tools/headless-client/.env` (modelo em `.env.example`) e veja as opções, as posições do `gym_01` e os comandos do teste de registro de acertos em [tools/headless-client/README.md](tools/headless-client/README.md). Exemplos:
 
 ```bash
 pnpm headless --script circle --duration 60
 pnpm headless --create --bots 3 --script square --duration 60 --latency 150 --jitter 20 --loss 2 --max-corrections-per-min 6
 pnpm headless --user dev2 --code ABC123 --script random-walk
+
+# Registro de acertos com 150 ms de RTT: alvo e atirador.
+pnpm headless --user dev2 --create --humans 2 --script strafe --axis y --god --teleport 228,400 --duration 90
+pnpm headless --user dev1 --code <código> --script aim-test --weapon secondary --no-spread --teleport 28,400 --duration 60 --latency 75 --jitter 20 --loss 2 --min-hit-ratio 0.95
 ```
 
 ### Mapas
