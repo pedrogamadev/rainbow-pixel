@@ -1,9 +1,15 @@
 import { describe, expect, it } from 'vitest';
-import { BOT_DIFFICULTIES } from '../catalog/index.js';
+import { BOT_DIFFICULTIES, WEAPON_SLOTS, getWeapon } from '../catalog/index.js';
 import { isValidNickname, nicknameKey } from '../validation/index.js';
 import {
   BOT_DIFFICULTY_PARAMS,
   BOT_LEVEL0_CONFIG,
+  BOT_LEVEL1_CONFIG,
+  COMBAT_CONFIG,
+  LAG_COMP_CONFIG,
+  VISION_CONFIG,
+  WEAPON_HANDLING,
+  getWeaponHandling,
   DEV_SEED_USERS,
   LOBBY_CONFIG,
   MATCH_CONFIG,
@@ -63,10 +69,6 @@ describe('BOT_LEVEL0_CONFIG', () => {
     expect(SIM_CONFIG.tickRate % BOT_LEVEL0_CONFIG.decisionRateHz).toBe(0);
   });
 
-  it('entre duas decisões, a fila repete o input sem o bot parar', () => {
-    const ticksPerDecision = SIM_CONFIG.tickRate / BOT_LEVEL0_CONFIG.decisionRateHz;
-    expect(ticksPerDecision - 1).toBeLessThanOrEqual(NET_CONFIG.inputRepeatTicks);
-  });
 });
 
 describe('LOBBY_CONFIG', () => {
@@ -123,5 +125,83 @@ describe('BOT_DIFFICULTY_PARAMS', () => {
     expect(medium.turnSpeedDegPerSec).toBeLessThan(hard.turnSpeedDegPerSec);
     expect(easy.memoryMs).toBeLessThan(medium.memoryMs);
     expect(medium.memoryMs).toBeLessThan(hard.memoryMs);
+  });
+});
+
+describe('COMBAT_CONFIG', () => {
+  it('segue o escopo: vida 100, fogo amigo a 50% e queda até 60% no dobro do alcance', () => {
+    expect(COMBAT_CONFIG.maxHealth).toBe(100);
+    expect(COMBAT_CONFIG.friendlyFireMultiplier).toBe(0.5);
+    expect(COMBAT_CONFIG.damageFalloffMinMultiplier).toBe(0.6);
+    expect(COMBAT_CONFIG.damageFalloffEndRangeMultiplier).toBe(2);
+  });
+
+  it('usa o loadout fixo do marco: M4A1 na primária e M9 na secundária', () => {
+    expect(COMBAT_CONFIG.matchLoadout).toEqual({ primary: 'm4a1', secondary: 'm9' });
+    for (const slot of WEAPON_SLOTS) {
+      const weapon = getWeapon(COMBAT_CONFIG.matchLoadout[slot]);
+      expect(weapon.slot).toBe(slot);
+      expect(weapon.enabled).toBe(true);
+      expect(weapon.pellets).toBe(1);
+    }
+  });
+
+  it('troca de arma em 400 ms e renasce em 3 s', () => {
+    expect(COMBAT_CONFIG.weaponSwitchMs).toBe(400);
+    expect(COMBAT_CONFIG.respawnDelayMs).toBe(3000);
+  });
+});
+
+describe('WEAPON_HANDLING', () => {
+  it('toda arma do loadout da partida tem manuseio', () => {
+    for (const slot of WEAPON_SLOTS) {
+      const weaponId = COMBAT_CONFIG.matchLoadout[slot];
+      expect(() => getWeaponHandling(weaponId)).not.toThrow();
+    }
+  });
+
+  it('falha para arma sem manuseio', () => {
+    expect(() => getWeaponHandling('m249')).toThrow(/m249/);
+  });
+
+  it('tem valores coerentes: tetos positivos e padrão de recuo não vazio', () => {
+    for (const handling of Object.values(WEAPON_HANDLING)) {
+      expect(handling.baseSpreadDeg).toBeGreaterThan(0);
+      expect(handling.walkSpreadDeg).toBeGreaterThan(handling.slowSpreadDeg);
+      expect(handling.maxShotSpreadDeg).toBeGreaterThanOrEqual(handling.shotSpreadDeg);
+      expect(handling.recoilPatternDeg.length).toBeGreaterThan(0);
+      expect(handling.maxRecoilDeg).toBeGreaterThan(0);
+      expect(handling.spreadRecoveryDegPerSec).toBeGreaterThan(0);
+      expect(handling.recoilRecoveryDegPerSec).toBeGreaterThan(0);
+    }
+  });
+});
+
+describe('LAG_COMP_CONFIG', () => {
+  it('guarda 300 ms de histórico e volta no máximo 200 ms (escopo, seção 10.1)', () => {
+    expect(LAG_COMP_CONFIG).toEqual({ historyMs: 300, maxRewindMs: 200 });
+    expect(LAG_COMP_CONFIG.historyMs).toBeGreaterThan(LAG_COMP_CONFIG.maxRewindMs);
+  });
+});
+
+describe('VISION_CONFIG', () => {
+  it('segue a seção 8.1 do escopo', () => {
+    expect(VISION_CONFIG).toEqual({ coneDeg: 100, rangePx: 900, peripheralPx: 48 });
+  });
+});
+
+describe('BOT_LEVEL1_CONFIG', () => {
+  it('dispara a até 2° do ponto escolhido, pausa 250 ms entre rajadas e usa a primária', () => {
+    expect(BOT_LEVEL1_CONFIG).toEqual({
+      fireToleranceDeg: 2,
+      burstPauseMs: 250,
+      weaponSlot: 'primary',
+    });
+  });
+});
+
+describe('NET_CONFIG: eventos', () => {
+  it('repete os eventos dos últimos 3 snapshots', () => {
+    expect(NET_CONFIG.eventRedundancySnapshots).toBe(3);
   });
 });

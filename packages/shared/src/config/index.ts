@@ -1,4 +1,5 @@
 import type { BotDifficultyId } from '../catalog/botDifficulties.js';
+import type { WeaponId, WeaponSlot } from '../catalog/weapons.js';
 import type { MoveMode } from '../sim/types.js';
 
 /** Formato da partida (escopo, seção 3.1). */
@@ -47,6 +48,11 @@ export const NET_CONFIG = {
   inputRate: 30,
   /** Inputs ainda não confirmados reenviados em cada mensagem, contra perda de pacote. */
   inputRedundancy: 3,
+  /**
+   * Cada snapshot repete os eventos (tiros, acertos, abates) dos últimos snapshots daquele
+   * cliente, contra perda de pacote. O cliente descarta o eventId já visto.
+   */
+  eventRedundancySnapshots: 3,
   /** Tamanho máximo da fila de inputs de um jogador no servidor. Os mais antigos saem. */
   inputQueueMax: 8,
   /** Inputs novos aceitos por segundo de um mesmo jogador. O excedente é descartado. */
@@ -75,6 +81,118 @@ export const NET_CONFIG = {
   clientMaxCatchUpTicks: 3,
 } as const;
 
+/** Combate (escopo, seções 3.1, 4 e 4.1). */
+export const COMBAT_CONFIG = {
+  /** Vida de cada jogador, sem regeneração. */
+  maxHealth: 100,
+  /**
+   * Loadout fixo do marco 0.3, para humanos e bots. A escolha de loadout é do marco 0.8; o
+   * banco e a simulação guardam só os ids do catálogo.
+   */
+  matchLoadout: { primary: 'm4a1', secondary: 'm9' } as const satisfies Record<
+    WeaponSlot,
+    WeaponId
+  >,
+  /** Duração da troca de arma. Durante a troca não dispara. */
+  weaponSwitchMs: 400,
+  /** Fogo amigo: o aliado recebe esta fração do dano. */
+  friendlyFireMultiplier: 0.5,
+  /** Queda de dano: depois de rangePx, cai linearmente até este fator do dano... */
+  damageFalloffMinMultiplier: 0.6,
+  /** ...que é atingido neste múltiplo de rangePx e vale daí em diante. */
+  damageFalloffEndRangeMultiplier: 2,
+  /** Renascimento temporário do marco 0.3: tempo morto antes de voltar ao spawn. */
+  respawnDelayMs: 3000,
+} as const;
+
+/** Manuseio de uma arma: dispersão e recuo (marco 0.3). Ângulos em graus. */
+export interface WeaponHandling {
+  /** Dispersão parado (meia abertura do cone de tiro). */
+  readonly baseSpreadDeg: number;
+  /** Acréscimo andando. */
+  readonly walkSpreadDeg: number;
+  /** Acréscimo andando lento. */
+  readonly slowSpreadDeg: number;
+  /** Acréscimo por tiro seguido. */
+  readonly shotSpreadDeg: number;
+  /** Teto do acréscimo acumulado pelos tiros seguidos. */
+  readonly maxShotSpreadDeg: number;
+  readonly spreadRecoveryDegPerSec: number;
+  /** Recuo somado à mira a cada tiro, em ciclo. */
+  readonly recoilPatternDeg: readonly number[];
+  /** Teto do recuo acumulado, para cada lado. */
+  readonly maxRecoilDeg: number;
+  readonly recoilRecoveryDegPerSec: number;
+}
+
+// Valores iniciais do marco 0.3, só para as armas do loadout fixo. As outras armas ganham
+// manuseio no marco 0.8.
+export const WEAPON_HANDLING = {
+  m4a1: {
+    baseSpreadDeg: 1,
+    walkSpreadDeg: 2,
+    slowSpreadDeg: 1,
+    shotSpreadDeg: 0.6,
+    maxShotSpreadDeg: 5,
+    spreadRecoveryDegPerSec: 10,
+    recoilPatternDeg: [1.2, 1, -0.8, 1.4, -1.2],
+    maxRecoilDeg: 8,
+    recoilRecoveryDegPerSec: 20,
+  },
+  m9: {
+    baseSpreadDeg: 0.8,
+    walkSpreadDeg: 1.5,
+    slowSpreadDeg: 0.8,
+    shotSpreadDeg: 1.5,
+    maxShotSpreadDeg: 6,
+    spreadRecoveryDegPerSec: 12,
+    recoilPatternDeg: [1.5, -1.5],
+    maxRecoilDeg: 5,
+    recoilRecoveryDegPerSec: 25,
+  },
+} as const satisfies Partial<Record<WeaponId, WeaponHandling>>;
+
+/** Manuseio da arma. Falha se a arma não tem manuseio cadastrado. */
+export function getWeaponHandling(weaponId: WeaponId): WeaponHandling {
+  const handling: WeaponHandling | undefined = (
+    WEAPON_HANDLING as Partial<Record<WeaponId, WeaponHandling>>
+  )[weaponId];
+  if (handling === undefined) {
+    throw new Error(`Arma sem manuseio em WEAPON_HANDLING: ${weaponId}`);
+  }
+  return handling;
+}
+
+/** Compensação de lag no servidor (escopo, seções 4.1 e 10.1). */
+export const LAG_COMP_CONFIG = {
+  /** Histórico de posições guardado pelo servidor. */
+  historyMs: 300,
+  /** Máximo que o servidor volta no tempo, contado da chegada do input. */
+  maxRewindMs: 200,
+} as const;
+
+/** Visão (escopo, seção 8.1). No marco 0.3 só a percepção do bot nível 1 usa. */
+export const VISION_CONFIG = {
+  /** Abertura total do cone para onde o jogador mira. */
+  coneDeg: 100,
+  rangePx: 900,
+  /** Visão periférica em 360°, medida do centro do jogador. */
+  peripheralPx: 48,
+} as const;
+
+/** Partes mínimas da tela da partida (marco 0.3). O HUD final é do marco 1.0. */
+export const HUD_CONFIG = {
+  /** Tempo até o tracer de um tiro sumir. */
+  tracerMs: 80,
+  /** Tempo do marcador de acerto na mira, depois do hit_confirm. */
+  hitMarkerMs: 250,
+  /** Tempo do arco de dano na borda da tela, depois do damage_taken. */
+  damageIndicatorMs: 1000,
+  /** Abates mostrados no feed e por quanto tempo cada um fica. */
+  killFeedSize: 4,
+  killFeedMs: 5000,
+} as const;
+
 /** Bot nível 0: patrulha de waypoints (escopo, seção 16.3). */
 export const BOT_LEVEL0_CONFIG = {
   /** Decisões por segundo. Nos ticks intermediários vale o último input. */
@@ -89,6 +207,20 @@ export const BOT_LEVEL0_CONFIG = {
   minProgressPx: 1,
 } as const;
 
+/** Bot nível 1: atirador (escopo, seção 16.3). A dificuldade fica em BOT_DIFFICULTY_PARAMS. */
+export const BOT_LEVEL1_CONFIG = {
+  /** Dispara quando a mira está até aqui do ponto escolhido (alvo + erro de mira). */
+  fireToleranceDeg: 2,
+  /** Depois da rajada máxima, solta o gatilho por este tempo e sorteia novo erro de mira. */
+  burstPauseMs: 250,
+  /** Neste marco os bots usam sempre a primária. */
+  weaponSlot: 'primary',
+} as const satisfies {
+  readonly fireToleranceDeg: number;
+  readonly burstPauseMs: number;
+  readonly weaponSlot: WeaponSlot;
+};
+
 /** Limites do simulador de lag (ferramenta de teste, escopo, seção 17). */
 export const DEV_NET_SIMULATOR_CONFIG = {
   maxLatencyMs: 1000,
@@ -102,6 +234,15 @@ export const DEV_HEADLESS_CONFIG = {
   frameRate: 60,
   /** Espera máxima pelo início da partida depois de entrar na sala. */
   matchWaitTimeoutSeconds: 120,
+  /** Roteiro strafe: tempo em cada sentido do eixo. */
+  strafeLegMs: 1500,
+  /** Roteiro aim-test: intervalo padrão entre dois disparos. */
+  defaultFireIntervalMs: 300,
+  /**
+   * Roteiro aim-test: não dispara no fim do roteiro, para o hit_confirm dos últimos disparos
+   * chegar antes do resumo.
+   */
+  hitConfirmGraceMs: 1500,
 } as const;
 
 /** Regras do lobby (escopo, seções 3.1 e 16.2). */
@@ -150,7 +291,8 @@ export interface BotDifficultyParams {
   readonly memoryMs: number;
 }
 
-// Valores iniciais da seção 16.4 do escopo. O nível 0 (marco 0.2) ainda não usa nenhum.
+// Valores iniciais da seção 16.4 do escopo. O nível 1 (marco 0.3) usa reação, erro de mira, giro
+// e rajada; atenção a som e memória ficam para o nível 2.
 export const BOT_DIFFICULTY_PARAMS = {
   easy: {
     reactionMs: 700,

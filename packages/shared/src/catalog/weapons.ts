@@ -1,4 +1,10 @@
-export type WeaponSlot = 'primary' | 'secondary';
+export const WEAPON_SLOTS = ['primary', 'secondary'] as const;
+
+export type WeaponSlot = (typeof WEAPON_SLOTS)[number];
+
+export function isWeaponSlot(value: unknown): value is WeaponSlot {
+  return WEAPON_SLOTS.some((slot) => slot === value);
+}
 
 export type WeaponFireMode = 'auto' | 'semi' | 'pump';
 
