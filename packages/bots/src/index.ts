@@ -7,5 +7,5 @@ export { angleDifference, turnTowards } from './aim.js';
 export { createBotMemory } from './memory.js';
 export type { BotMemory, BotTarget } from './memory.js';
 export { canSee, visibleEnemies } from './perception.js';
-export { HOLD_FIRE, directionTowards, level0Brain } from './levels/level0.js';
+export { HOLD_FIRE, level0Brain } from './levels/level0.js';
 export { allyInLine, createLevel1Brain } from './levels/level1.js';

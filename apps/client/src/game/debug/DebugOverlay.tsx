@@ -112,7 +112,7 @@ export function DebugOverlay({ handle }: { readonly handle: GameHandle | null })
         >
           Dispersão zero: {dev?.noSpread === true ? 'ligada' : 'desligada'}
         </button>
-        <p className="hint">T: teleporta para o ponto sob o mouse.</p>
+        <p className="hint">T: teleporta para o ponto sob o mouse solto (Esc solta o mouse).</p>
       </div>
 
       <form

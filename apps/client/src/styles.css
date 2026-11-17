@@ -352,8 +352,29 @@ button:disabled {
   cursor: crosshair;
 }
 
+.game-canvas-host {
+  position: absolute;
+  inset: 0;
+}
+
 .game-canvas canvas {
   display: block;
+}
+
+/* Aviso enquanto o mouse está solto: o clique trava o mouse e a mira gira com ele. */
+.aim-hint {
+  position: absolute;
+  bottom: 1.5rem;
+  left: 50%;
+  transform: translateX(-50%);
+  margin: 0;
+  padding: 0.5rem 0.9rem;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: rgb(20 22 28 / 88%);
+  font-size: 0.9rem;
+  white-space: nowrap;
+  pointer-events: none;
 }
 
 /* Overlay de debug (F3) */

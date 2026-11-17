@@ -186,15 +186,17 @@ describe('compensação de lag na partida', () => {
     sim.teleport('atirador', 100, 240);
     sim.teleport('alvo', 400, 100);
     sim.setNoSpread('atirador', true);
+    // Mira para baixo e anda para frente (W).
+    const walkDown = { aimAngle: Math.PI / 2, moveY: -1 } as const;
     for (let tick = 1; tick < 30; tick += 1) {
-      sim.enqueueInputs('alvo', [input(tick, { moveY: 1 })], at(tick - 1));
+      sim.enqueueInputs('alvo', [input(tick, walkDown)], at(tick - 1));
       sim.advance(at(tick));
     }
     // Onde o alvo estava 175 ms atrás, contados do tick 30 (o do disparo).
     const tickTime = START + 30 * TICK_MS;
     const seenY = 100 + (140 * (30 * TICK_MS - 175)) / 1000;
     const aimAngle = Math.atan2(seenY - 240, 400 - 100);
-    sim.enqueueInputs('alvo', [input(30, { moveY: 1 })], at(29));
+    sim.enqueueInputs('alvo', [input(30, walkDown)], at(29));
     sim.enqueueInputs(
       'atirador',
       [input(1, { fire: true, aimAngle, viewTimeMs: tickTime - declaredRewindMs })],

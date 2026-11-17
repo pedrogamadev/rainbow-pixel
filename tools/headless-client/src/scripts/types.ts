@@ -37,7 +37,7 @@ export type InputScript = (tick: number, context: ScriptContext) => PlayerInput;
 /** Roteiro de movimento puro: só anda e mira, sem atirar. */
 export type MoveScript = (tick: number) => MoveInput;
 
-/** As 8 direções do teclado, a partir do leste, no sentido horário (y cresce para baixo). */
+/** As 8 direções do mundo, a partir do leste, no sentido horário (y cresce para baixo). */
 export const DIRECTIONS: readonly (readonly [MoveAxis, MoveAxis])[] = [
   [1, 0],
   [1, 1],
@@ -49,13 +49,19 @@ export const DIRECTIONS: readonly (readonly [MoveAxis, MoveAxis])[] = [
   [1, -1],
 ];
 
-/** Anda na direção dada, mirando para onde anda. */
+/**
+ * Anda na direção dada do mundo, mirando para onde anda. Como o movimento é relativo à mira,
+ * basta mirar na direção e andar para frente (W).
+ */
 export function move(
   direction: readonly [MoveAxis, MoveAxis],
   moveMode: MoveMode = 'walk',
 ): MoveInput {
-  const [moveX, moveY] = direction;
-  return { moveX, moveY, aimAngle: Math.atan2(moveY, moveX), moveMode };
+  const [dx, dy] = direction;
+  if (dx === 0 && dy === 0) {
+    return { moveX: 0, moveY: 0, aimAngle: 0, moveMode };
+  }
+  return { moveX: 0, moveY: -1, aimAngle: Math.atan2(dy, dx), moveMode };
 }
 
 /** Roteiro de movimento que segura a arma pedida, sem atirar nem recarregar. */

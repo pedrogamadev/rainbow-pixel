@@ -18,9 +18,11 @@ export type MoveMode = (typeof MOVE_MODES)[number];
 /** Direção de um eixo do teclado. */
 export type MoveAxis = -1 | 0 | 1;
 
-/** Movimento e mira de um tick. */
+/** Movimento e mira de um tick. O movimento é relativo à mira (ver `moveDirection`). */
 export interface MoveInput {
+  /** 1: para a direita da mira (D). -1: para a esquerda (A). */
   readonly moveX: MoveAxis;
+  /** -1: para onde mira (W). 1: para trás (S). */
   readonly moveY: MoveAxis;
   /** Radianos, finito. */
   readonly aimAngle: number;

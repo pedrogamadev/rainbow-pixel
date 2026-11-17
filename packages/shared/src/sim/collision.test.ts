@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { SIM_CONFIG } from '../config/index.js';
 import { createSeededRandom } from '../random/index.js';
 import { circleOverlapsSolid, moveCircle } from './collision.js';
-import { TICK_SECONDS, stepPlayer } from './movement.js';
+import { AIM_NORTH, TICK_SECONDS, stepPlayer } from './movement.js';
 import { mapWithWalls } from './testing/asciiMap.js';
 import { testPlayer } from './testing/fixtures.js';
 import type { AsciiMap } from './testing/asciiMap.js';
@@ -16,8 +16,9 @@ function player(x: number, y: number): PlayerSimState {
   return testPlayer('p1', x, y);
 }
 
+/** Mirando para o norte, o movimento relativo à mira segue os eixos do mundo. */
 function input(moveX: MoveAxis, moveY: MoveAxis, moveMode: MoveInput['moveMode'] = 'walk') {
-  return { moveX, moveY, aimAngle: 0, moveMode } as const;
+  return { moveX, moveY, aimAngle: AIM_NORTH, moveMode } as const;
 }
 
 function hold(map: AsciiMap, state: PlayerSimState, move: MoveInput, ticks: number) {

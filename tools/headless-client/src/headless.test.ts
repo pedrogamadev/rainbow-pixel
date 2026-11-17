@@ -197,24 +197,29 @@ describe('roteiros', () => {
     expect(script(999, context())).toMatchObject({ moveX: 0, moveY: 0 });
   });
 
-  it('circle passa pelas 8 direções e mira para onde anda', () => {
+  it('circle passa pelas 8 direções e mira para onde anda (W, movimento relativo à mira)', () => {
     const script = createScript('circle', 1);
-    const directions = new Set<string>();
+    const aims = new Set<string>();
     for (let tick = 0; tick < 64; tick += 1) {
       const input = script(tick, context());
-      directions.add(`${input.moveX},${input.moveY}`);
-      expect(input.aimAngle).toBeCloseTo(Math.atan2(input.moveY, input.moveX), 9);
+      expect(input).toMatchObject({ moveX: 0, moveY: -1 });
+      aims.add(input.aimAngle.toFixed(6));
     }
-    expect(directions.size).toBe(8);
+    expect(aims.size).toBe(8);
   });
 
   it('square anda em linha reta em cada lado e volta ao começo', () => {
     const script = createScript('square', 1);
-    expect(script(0, context())).toMatchObject({ moveX: 1, moveY: 0 });
-    expect(script(44, context())).toMatchObject({ moveX: 1, moveY: 0 });
-    expect(script(45, context())).toMatchObject({ moveX: 0, moveY: 1 });
-    expect(script(90, context())).toMatchObject({ moveX: -1, moveY: 0 });
-    expect(script(135, context())).toMatchObject({ moveX: 0, moveY: -1 });
+    const heading = (tick: number) => {
+      const input = script(tick, context());
+      expect(input).toMatchObject({ moveX: 0, moveY: -1 });
+      return input.aimAngle;
+    };
+    expect(heading(0)).toBeCloseTo(0, 9);
+    expect(heading(44)).toBeCloseTo(0, 9);
+    expect(heading(45)).toBeCloseTo(Math.PI / 2, 9);
+    expect(heading(90)).toBeCloseTo(Math.PI, 9);
+    expect(heading(135)).toBeCloseTo(-Math.PI / 2, 9);
     expect(script(180, context())).toEqual(script(0, context()));
   });
 
@@ -235,15 +240,17 @@ describe('roteiro strafe', () => {
   it('anda em walk no eixo pedido, alternando -1 e 1 a cada 1500 ms', () => {
     const script = createScript('strafe', 1);
     const leg = Math.round(1500 / TICK_MS);
-    expect(script(0, context({ axis: 'y' }))).toMatchObject({
-      moveX: 0,
-      moveY: -1,
-      moveMode: 'walk',
-    });
-    expect(script(leg - 1, context({ axis: 'y' }))).toMatchObject({ moveY: -1 });
-    expect(script(leg, context({ axis: 'y' }))).toMatchObject({ moveY: 1 });
-    expect(script(2 * leg, context({ axis: 'y' }))).toMatchObject({ moveY: -1 });
-    expect(script(0, context())).toMatchObject({ moveX: -1, moveY: 0 });
+    // Movimento relativo à mira: mira no sentido do eixo e anda para frente (W).
+    const heading = (tick: number, axis: 'x' | 'y') => {
+      const input = script(tick, context({ axis }));
+      expect(input).toMatchObject({ moveX: 0, moveY: -1, moveMode: 'walk' });
+      return input.aimAngle;
+    };
+    expect(heading(0, 'y')).toBeCloseTo(-Math.PI / 2, 9);
+    expect(heading(leg - 1, 'y')).toBeCloseTo(-Math.PI / 2, 9);
+    expect(heading(leg, 'y')).toBeCloseTo(Math.PI / 2, 9);
+    expect(heading(2 * leg, 'y')).toBeCloseTo(-Math.PI / 2, 9);
+    expect(heading(0, 'x')).toBeCloseTo(Math.PI, 9);
   });
 });
 

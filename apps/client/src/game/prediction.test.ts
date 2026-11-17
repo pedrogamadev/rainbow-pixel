@@ -1,4 +1,4 @@
-import { NET_CONFIG, TICK_MS, createPlayerState } from '@rainbow-pixel/shared';
+import { AIM_NORTH, NET_CONFIG, TICK_MS, createPlayerState } from '@rainbow-pixel/shared';
 import type { InputCommand, PlayerSimState } from '@rainbow-pixel/shared';
 import { describe, expect, it } from 'vitest';
 import { Predictor } from './prediction.js';
@@ -7,7 +7,7 @@ import { FakeServer, openMap } from './testing/fakeServer.js';
 
 const START: PlayerSimState = createPlayerState({ playerId: 'eu', team: 0, x: 1000, y: 1000 });
 
-/** Anda em quadrado: 20 ticks para cada lado. */
+/** Anda em quadrado: 20 ticks para cada lado. Mirando para o norte, o WASD segue o mundo. */
 function squareInput(seq: number): InputCommand {
   const side = Math.floor((seq - 1) / 20) % 4;
   const [moveX, moveY] = (
@@ -22,7 +22,7 @@ function squareInput(seq: number): InputCommand {
     seq,
     moveX,
     moveY,
-    aimAngle: 0,
+    aimAngle: AIM_NORTH,
     moveMode: 'walk',
     fire: false,
     reload: false,

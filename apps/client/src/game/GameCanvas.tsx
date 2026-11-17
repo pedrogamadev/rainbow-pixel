@@ -1,8 +1,10 @@
 import { createCollisionGrid, getMap } from '@rainbow-pixel/maps';
 import { Application, Container } from 'pixi.js';
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { GameSession } from '../lib/colyseus';
 import { GameClient } from './GameClient';
+import { screenToWorld, viewRotation } from './camera';
+import type { Camera } from './camera';
 import { KeyboardMouseInput } from './input';
 import { CrosshairView, DamageIndicatorView, TracersView } from './render/combatView';
 import { createMapGraphics } from './render/mapView';
@@ -31,8 +33,8 @@ interface GameCanvasProps {
   /** Desenha o fantasma da posição confirmada pelo servidor (overlay de debug). */
   readonly showGhost: boolean;
   /**
-   * Ferramenta de teste: com a função, a tecla T teleporta para o ponto do mapa sob o mouse.
-   * Sem ela (VITE_DEV_TOOLS desligado), a tecla não faz nada.
+   * Ferramenta de teste: com a função, a tecla T teleporta para o ponto do mapa sob o mouse
+   * solto (Esc). Sem ela (VITE_DEV_TOOLS desligado), a tecla não faz nada.
    */
   readonly onTeleport?: (x: number, y: number) => void;
   /** Recebe a partida quando ela começa a ser desenhada, e `null` ao sair. */
@@ -41,7 +43,10 @@ interface GameCanvasProps {
 
 const UNKNOWN_PLAYER: PlayerInfo = { nickname: '' };
 
-/** Partida em PixiJS: mapa, jogadores, tiros e câmera seguindo o próprio jogador. */
+/**
+ * Partida em PixiJS: mapa, jogadores e tiros. A câmera segue o próprio jogador e gira o mapa com
+ * a mira, que fica sempre para cima na tela.
+ */
 export function GameCanvas({
   session,
   mapId,
@@ -51,6 +56,7 @@ export function GameCanvas({
   onReady,
 }: GameCanvasProps) {
   const hostRef = useRef<HTMLDivElement>(null);
+  const [aimLocked, setAimLocked] = useState(false);
   // O laço de desenho lê a versão mais nova destes valores sem recriar a partida.
   const playersRef = useRef(players);
   const showGhostRef = useRef(showGhost);
@@ -87,16 +93,26 @@ export function GameCanvas({
     let ready = false;
     let disposed = false;
     let input: KeyboardMouseInput | null = null;
+    let stopAimLock: (() => void) | null = null;
+    /** Câmera do último quadro desenhado. */
+    let camera: Camera | null = null;
     const world = new Container();
 
-    // T: teleporte para o ponto do mapa sob o mouse (ferramenta de teste).
+    // T: teleporte para o ponto do mapa sob o mouse solto (ferramenta de teste).
     const onKeyDown = (event: KeyboardEvent) => {
       const teleport = onTeleportRef.current;
       const pointer = input?.pointerPosition() ?? null;
-      if (event.code !== 'KeyT' || event.repeat || teleport === undefined || pointer === null) {
+      if (
+        event.code !== 'KeyT' ||
+        event.repeat ||
+        teleport === undefined ||
+        pointer === null ||
+        camera === null
+      ) {
         return;
       }
-      teleport(pointer.x - world.position.x, pointer.y - world.position.y);
+      const target = screenToWorld(camera, pointer);
+      teleport(target.x, target.y);
     };
     window.addEventListener('keydown', onKeyDown);
 
@@ -125,12 +141,18 @@ export function GameCanvas({
         app.stage.addChild(world, damage.graphics);
         const keyboard = new KeyboardMouseInput(app.canvas);
         input = keyboard;
+        stopAimLock = keyboard.onAimLockChange(setAimLocked);
 
         app.ticker.add(() => {
-          const center = { x: app.screen.width / 2, y: app.screen.height / 2 };
-          // A câmera centraliza o próprio jogador: na tela, ele está sempre no centro.
-          game.update((self) => keyboard.sample(self === null ? null : center));
+          const center = {
+            x: Math.round(app.screen.width / 2),
+            y: Math.round(app.screen.height / 2),
+          };
+          game.update(() => keyboard.sample());
           const at = now();
+          // A câmera gira com a mira do mouse a cada quadro, sem esperar o tick de 30 Hz.
+          const aim = keyboard.currentAim();
+          const rotation = viewRotation(aim);
 
           const drawn: DrawnPlayer[] = game.renderOthers().map((other) => ({
             ...other,
@@ -138,24 +160,33 @@ export function GameCanvas({
             isSelf: false,
           }));
           const self = game.renderSelf();
+          // Correndo, a mira fica presa na direção do movimento (regra da simulação). Fora isso,
+          // o próprio jogador aponta para a mira do mouse, a mesma da câmera: para cima na tela.
+          const selfAim =
+            self !== null && game.predictedSelf()?.moveMode === 'run' ? self.aimAngle : aim;
           if (self !== null) {
             drawn.push({
               ...self,
+              aimAngle: selfAim,
               ...(playersRef.current.get(self.playerId) ?? UNKNOWN_PLAYER),
               isSelf: true,
             });
-            world.position.set(Math.round(center.x - self.x), Math.round(center.y - self.y));
+            // O próprio jogador fica no centro da tela, e o mundo gira em volta dele.
+            camera = { center, focus: { x: self.x, y: self.y }, rotation };
+            world.pivot.set(self.x, self.y);
+            world.position.set(center.x, center.y);
+            world.rotation = rotation;
           }
-          playersView.update(drawn);
+          playersView.update(drawn, rotation);
           tracers.update(effects.tracers(at));
 
           const spread = game.aimSpread();
           crosshair.update(
             self === null || !self.alive || spread === null
               ? null
-              : { origin: self, aimAngle: self.aimAngle, ...spread, hit: effects.hitMarker(at) },
+              : { origin: self, aimAngle: selfAim, ...spread, hit: effects.hitMarker(at) },
           );
-          damage.update(effects.damageIndicators(at), self, center, app.screen);
+          damage.update(effects.damageIndicators(at), self, center, app.screen, rotation);
 
           const confirmed = game.serverSelf();
           ghost.visible = showGhostRef.current && confirmed !== null;
@@ -175,6 +206,7 @@ export function GameCanvas({
       stopShots();
       stopEvents();
       stopReconnect();
+      stopAimLock?.();
       input?.dispose();
       game.dispose();
       onReadyRef.current?.(null);
@@ -184,5 +216,14 @@ export function GameCanvas({
     };
   }, [session, mapId]);
 
-  return <div ref={hostRef} className="game-canvas" />;
+  return (
+    <div className="game-canvas">
+      <div ref={hostRef} className="game-canvas-host" />
+      {!aimLocked && (
+        <p className="aim-hint" role="status">
+          Clique no jogo para controlar a mira com o mouse. Esc solta o cursor.
+        </p>
+      )}
+    </div>
+  );
 }

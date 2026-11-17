@@ -3,6 +3,7 @@
 
 import type { Vec2 } from '@rainbow-pixel/shared';
 import { Graphics } from 'pixi.js';
+import { screenAngle } from '../camera';
 import type { DamageIndicator, Tracer } from '../shots';
 import {
   CROSSHAIR_COLOR,
@@ -77,23 +78,23 @@ export class CrosshairView {
         .stroke({ width: 1, color: CROSSHAIR_COLOR, alpha: 0.7 });
     }
     if (state.hit !== null) {
-      // X na ponta da mira.
+      // X na ponta da mira, com os braços a 45° da mira: como a câmera gira com a mira, o X
+      // fica em pé na tela.
       const tip = {
         x: state.origin.x + Math.cos(center) * CROSSHAIR_END,
         y: state.origin.y + Math.sin(center) * CROSSHAIR_END,
       };
       const color = state.hit.killed ? KILL_MARKER_COLOR : HIT_MARKER_COLOR;
-      for (const [sx, sy] of [
-        [1, 1],
-        [1, -1],
-        [-1, 1],
-        [-1, -1],
-      ] as const) {
+      for (const arm of [1, 3, 5, 7]) {
+        const angle = center + (arm * Math.PI) / 4;
+        // √2: o mesmo tamanho do X de antes, medido em cada eixo.
+        const dx = Math.cos(angle) * Math.SQRT2;
+        const dy = Math.sin(angle) * Math.SQRT2;
         graphics
-          .moveTo(tip.x + sx * HIT_MARKER_GAP, tip.y + sy * HIT_MARKER_GAP)
+          .moveTo(tip.x + dx * HIT_MARKER_GAP, tip.y + dy * HIT_MARKER_GAP)
           .lineTo(
-            tip.x + sx * (HIT_MARKER_GAP + HIT_MARKER_SIZE),
-            tip.y + sy * (HIT_MARKER_GAP + HIT_MARKER_SIZE),
+            tip.x + dx * (HIT_MARKER_GAP + HIT_MARKER_SIZE),
+            tip.y + dy * (HIT_MARKER_GAP + HIT_MARKER_SIZE),
           )
           .stroke({ width: 2, color, alpha: state.hit.alpha });
       }
@@ -108,12 +109,14 @@ export class DamageIndicatorView {
   /**
    * @param center posição do próprio jogador na tela
    * @param self posição do próprio jogador no mundo
+   * @param viewRotation giro do mundo na tela (a câmera gira com a mira)
    */
   update(
     indicators: readonly DamageIndicator[],
     self: Vec2 | null,
     center: Vec2,
     screen: { readonly width: number; readonly height: number },
+    viewRotation: number,
   ): void {
     const graphics = this.graphics.clear();
     if (self === null) {
@@ -121,7 +124,10 @@ export class DamageIndicatorView {
     }
     const radius = Math.max(40, Math.min(screen.width, screen.height) / 2 - DAMAGE_ARC_MARGIN);
     for (const indicator of indicators) {
-      const angle = Math.atan2(indicator.origin.y - self.y, indicator.origin.x - self.x);
+      const angle = screenAngle(
+        Math.atan2(indicator.origin.y - self.y, indicator.origin.x - self.x),
+        viewRotation,
+      );
       const start = angle - DAMAGE_ARC_HALF_SPAN;
       graphics
         .moveTo(center.x + Math.cos(start) * radius, center.y + Math.sin(start) * radius)

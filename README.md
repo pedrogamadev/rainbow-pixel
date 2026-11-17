@@ -111,7 +111,7 @@ Crie uma conta, escolha um nickname e use "Criar sala" ou "Entrar com código".
 
 Com a sala fechada em 2v2 e todos prontos, o servidor conta 3 segundos e a partida começa na mesma sala, no mapa `gym_01`. O host encerra pelo botão "Encerrar partida" e todos voltam ao lobby, não prontos (bots continuam prontos). Se todos os humanos ficarem desconectados, a sala também volta ao lobby.
 
-Controles: WASD move, Shift anda lento, Ctrl corre (sem atirar, mirando para onde corre), o mouse mira, o botão esquerdo atira (segure para a M4A1), R recarrega e 1 e 2 trocam entre a M4A1 e a M9. Durante a partida, fechar ou recarregar a aba pede confirmação, porque Ctrl+W fecha a aba e o navegador não deixa o jogo impedir.
+Controles: a câmera gira com a mira, que fica sempre para cima na tela. Clique no jogo para travar o mouse; o movimento horizontal dele gira a mira, e Esc solta o mouse. WASD anda relativo à mira (W para frente, S para trás, A e D de lado), Shift anda lento, Ctrl corre (sem atirar, mirando para onde corre), o botão esquerdo atira (segure para a M4A1), R recarrega e 1 e 2 trocam entre a M4A1 e a M9. Durante a partida, fechar ou recarregar a aba pede confirmação, porque Ctrl+W fecha a aba e o navegador não deixa o jogo impedir.
 
 Combate deste marco: vida 100, sem regeneração; M4A1 (32 de dano, 750 RPM, 30 balas) e M9 (30 de dano, 450 RPM semiautomática, 15 balas), com o dano caindo até 60% entre o alcance e o dobro dele; fogo amigo a 50%. Quem morre fica parado como corpo por 3 s e renasce no próprio spawn com vida e pentes cheios (regra temporária até os rounds do marco 0.6). O HUD mínimo mostra vida, arma, munição, barras de recarga e troca, os últimos abates e a contagem até renascer.
 
@@ -174,7 +174,7 @@ Na partida, F3 abre o overlay de debug (só com `VITE_DEV_TOOLS=true`): FPS, RTT
 
 ### Comandos de debug
 
-Com `DEV_TOOLS=true` no servidor, a mensagem `dev_command` aplica a quem envia: teleporte (`teleport`, recusado dentro de parede), vida infinita (`god`: o dano é calculado e confirmado, mas não desconta vida) e dispersão zero (`no_spread`: o recuo continua). No overlay (F3) há botões para `god` e `no_spread`, e a tecla T teleporta para o ponto sob o mouse. Com `DEV_TOOLS=false`, o servidor recusa com `dev_tools_disabled`.
+Com `DEV_TOOLS=true` no servidor, a mensagem `dev_command` aplica a quem envia: teleporte (`teleport`, recusado dentro de parede), vida infinita (`god`: o dano é calculado e confirmado, mas não desconta vida) e dispersão zero (`no_spread`: o recuo continua). No overlay (F3) há botões para `god` e `no_spread`, e a tecla T teleporta para o ponto sob o mouse solto (Esc solta o mouse). Com `DEV_TOOLS=false`, o servidor recusa com `dev_tools_disabled`.
 
 ### Cliente headless
 

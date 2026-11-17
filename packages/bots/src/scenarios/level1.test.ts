@@ -311,7 +311,9 @@ describe('bot nível 1: perde o alvo', () => {
     expect(fired(engaged).length).toBeGreaterThan(0);
     visible = false;
     const lost = run(HARD, 3, scene, memory);
-    expect(lost.intents[0]).toMatchObject({ moveX: 0, moveY: 1, fire: false });
+    // Patrulha: mira no waypoint, ao sul, e anda para frente.
+    expect(lost.intents[0]).toMatchObject({ moveX: 0, moveY: -1, fire: false });
+    expect(lost.intents[0]?.aimAngle).toBeCloseTo(Math.PI / 2, 9);
     expect(memory.target).toBeNull();
   });
 
@@ -347,6 +349,8 @@ describe('bot nível 1: morto', () => {
     HARD.decide(botView({ self: { alive: false }, waypoints }), memory, DECISION_MS);
     const intent = HARD.decide(botView({ waypoints }), memory, DECISION_MS);
     expect(memory.waypointIndex).toBe(0);
-    expect(intent).toMatchObject({ moveX: 0, moveY: 1 });
+    // Mira no waypoint 0, ao sul, e anda para frente.
+    expect(intent).toMatchObject({ moveX: 0, moveY: -1 });
+    expect(intent.aimAngle).toBeCloseTo(Math.PI / 2, 9);
   });
 });

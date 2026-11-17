@@ -1,6 +1,7 @@
 import { SIM_CONFIG } from '@rainbow-pixel/shared';
 import type { TeamIndex } from '@rainbow-pixel/shared';
 import { Container, Graphics, Text } from 'pixi.js';
+import { screenUpOffset } from '../camera';
 import {
   AIM_LINE_COLOR,
   DEAD_ALPHA,
@@ -25,7 +26,8 @@ export interface DrawnPlayer {
 
 const RADIUS = SIM_CONFIG.playerRadius;
 const AIM_LINE_LENGTH = RADIUS + 10;
-const NICKNAME_OFFSET_Y = RADIUS + 12;
+/** Distância, na tela, do centro do jogador até a base do nickname. */
+const NICKNAME_OFFSET = RADIUS + 2;
 const DISCONNECTED_ALPHA = 0.4;
 
 interface PlayerSprite {
@@ -47,7 +49,7 @@ function createSprite(): PlayerSprite {
     style: { fill: NICKNAME_COLOR, fontSize: 11, fontFamily: 'system-ui, sans-serif' },
   });
   name.anchor.set(0.5, 1);
-  name.y = -NICKNAME_OFFSET_Y + 10;
+  name.y = -NICKNAME_OFFSET;
   root.addChild(body, aim, name);
   return { root, body, aim, name, team: null, isSelf: null };
 }
@@ -60,7 +62,12 @@ export class PlayersView {
   readonly container = new Container();
   private readonly sprites = new Map<string, PlayerSprite>();
 
-  update(players: readonly DrawnPlayer[]): void {
+  /**
+   * @param viewRotation giro do mundo na tela (a câmera gira com a mira). O nickname gira ao
+   *   contrário para ficar em pé e acima do jogador na tela.
+   */
+  update(players: readonly DrawnPlayer[], viewRotation: number): void {
+    const nameOffset = screenUpOffset(viewRotation, NICKNAME_OFFSET);
     const seen = new Set<string>();
     for (const player of players) {
       seen.add(player.playerId);
@@ -82,6 +89,8 @@ export class PlayersView {
         sprite.name.text = player.nickname;
       }
       sprite.root.position.set(player.x, player.y);
+      sprite.name.position.set(nameOffset.x, nameOffset.y);
+      sprite.name.rotation = -viewRotation;
       sprite.aim.rotation = player.aimAngle;
       sprite.aim.visible = player.alive;
       sprite.root.alpha = !player.alive ? DEAD_ALPHA : player.connected ? 1 : DISCONNECTED_ALPHA;

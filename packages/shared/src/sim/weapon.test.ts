@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { getWeapon } from '../catalog/index.js';
 import { COMBAT_CONFIG, SIM_CONFIG, WEAPON_HANDLING } from '../config/index.js';
 import { hashRandom } from '../random/index.js';
-import { TICK_MS } from './movement.js';
+import { AIM_NORTH, TICK_MS } from './movement.js';
 import { stepSelf } from './self.js';
 import type { SelfStepOptions } from './self.js';
 import { openMap } from './testing/asciiMap.js';
@@ -181,7 +181,14 @@ describe('troca de arma', () => {
 
 describe('correr', () => {
   it('bloqueia o tiro e prende a mira na direção do movimento', () => {
-    const running = testInput({ fire: true, moveMode: 'run', moveX: 1, moveY: 1, aimAngle: 2 });
+    // Mirando para o norte, D + S corre para o sudeste.
+    const running = testInput({
+      fire: true,
+      moveMode: 'run',
+      moveX: 1,
+      moveY: 1,
+      aimAngle: AIM_NORTH,
+    });
     const { shotTicks, state } = play(testPlayer('p', 800, 800), repeat(running, 10));
     expect(shotTicks).toEqual([]);
     expect(state.aimAngle).toBeCloseTo(Math.PI / 4, 9);
@@ -199,7 +206,8 @@ describe('correr', () => {
 describe('input repetido pelo servidor', () => {
   it('não dispara, não recarrega e não troca de arma, mas move e mira', () => {
     const start = withWeapon({ ammo: { primary: 10, secondary: 15 } });
-    const input = testInput({ fire: true, reload: true, moveX: 1, aimAngle: 1 });
+    // W anda para onde mira: 1 rad, para leste e um pouco para o sul.
+    const input = testInput({ fire: true, reload: true, moveY: -1, aimAngle: 1 });
     const result = stepSelf(map, start, input, { repeated: true });
     expect(result.shot).toBeNull();
     expect(result.state.weapon.reloadLeftMs).toBe(0);

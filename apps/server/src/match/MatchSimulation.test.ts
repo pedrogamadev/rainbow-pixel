@@ -39,11 +39,12 @@ function at(tick: number): number {
   return START + tick * TICK_MS + 0.01;
 }
 
+/** Por padrão, W mirando para o leste: anda para o leste. */
 function input(seq: number, overrides: Partial<InputCommand> = {}): InputCommand {
   return {
     seq,
-    moveX: 1,
-    moveY: 0,
+    moveX: 0,
+    moveY: -1,
     aimAngle: 0,
     moveMode: 'walk',
     fire: false,
@@ -196,7 +197,8 @@ describe('MatchSimulation: conexão', () => {
     sim.setConnected('ana', true);
     const position = player(sim, 'ana');
     expect(sim.snapshotFor('ana', () => true).ackSeq).toBe(0);
-    sim.enqueueInputs('ana', [input(1, { moveX: -1 })], at(1));
+    // S mirando para o leste: anda de costas, para o oeste.
+    sim.enqueueInputs('ana', [input(1, { moveY: 1 })], at(1));
     sim.advance(at(2));
     expect(player(sim, 'ana').x).toBeLessThan(position.x);
   });
@@ -302,14 +304,16 @@ describe('MatchSimulation: bots nível 1 no gym_01', () => {
         expect(sim.teleport('ana', spot.x, spot.y)).toBe(true);
       }
       sim.advance(at(tick));
-      const ana = player(sim, 'ana');
+      // O bot vê o estado do começo do tick (o viewTimeMs dele), e a compensação de lag avalia
+      // o tiro ali: no tick do teleporte, quem atira ainda vê a ana no ponto antigo.
+      const seenAna = previous.get('ana') ?? player(sim, 'ana');
       for (const event of sim.snapshotFor('ana', () => true).events) {
         if (event.tick !== sim.tick) continue;
         if (event.kind === 'damage_taken') {
           hitsOnAna += 1;
-          // Só leva tiro à vista, e quem acertou tinha a linha livre até ela.
-          expect(isExposed).toBe(true);
-          expect(hasLineOfSight(grid, event.origin, ana)).toBe(true);
+          // Só leva tiro à vista, e quem acertou tinha a linha livre até onde a via.
+          expect(seenAna).not.toMatchObject(hidden);
+          expect(hasLineOfSight(grid, event.origin, seenAna)).toBe(true);
         }
         if (event.kind === 'shot') {
           botShots += 1;

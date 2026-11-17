@@ -11,7 +11,7 @@ import type { CollisionMap, PlayerSimState, Vec2 } from '@rainbow-pixel/shared';
 import { describe, expect, it } from 'vitest';
 import type { BotIntent } from '../BotBrain.js';
 import type { PlayerView } from '../PlayerView.js';
-import { directionTowards, level0Brain } from '../levels/level0.js';
+import { level0Brain } from '../levels/level0.js';
 import { createBotMemory } from '../memory.js';
 import { botView } from '../testing/views.js';
 import type { BotMemory } from '../memory.js';
@@ -37,35 +37,54 @@ const SQUARE: readonly Vec2[] = [
   { x: 100, y: 400 },
 ];
 
+/** O movimento é relativo à mira: o bot anda para frente (W) mirando no destino. */
+const FORWARD = { moveX: 0, moveY: -1 } as const;
+
+function expectHeadingTo(command: BotIntent, from: Vec2, to: Vec2): void {
+  expect(command).toMatchObject({ ...FORWARD, moveMode: 'walk' });
+  expect(command.aimAngle).toBeCloseTo(Math.atan2(to.y - from.y, to.x - from.x), 9);
+}
+
 describe('bot nível 0: anda em direção ao waypoint', () => {
   it.each([
-    ['leste', { x: 300, y: 100 }, [1, 0]],
-    ['oeste', { x: -100, y: 100 }, [-1, 0]],
-    ['sul', { x: 100, y: 300 }, [0, 1]],
-    ['norte', { x: 100, y: -100 }, [0, -1]],
-    ['nordeste', { x: 300, y: -100 }, [1, -1]],
-    ['sudoeste', { x: -100, y: 300 }, [-1, 1]],
-  ] as const)('waypoint a %s', (_name, waypoint, [moveX, moveY]) => {
+    ['leste', { x: 300, y: 100 }, 0],
+    ['oeste', { x: -100, y: 100 }, Math.PI],
+    ['sul', { x: 100, y: 300 }, Math.PI / 2],
+    ['norte', { x: 100, y: -100 }, -Math.PI / 2],
+    ['nordeste', { x: 300, y: -100 }, -Math.PI / 4],
+    ['sudoeste', { x: -100, y: 300 }, (3 * Math.PI) / 4],
+  ] as const)('waypoint a %s: mira nele e anda para frente', (_name, waypoint, aimAngle) => {
     const command = decide({ x: 100, y: 100 }, [waypoint], createBotMemory());
-    expect(command).toMatchObject({ moveX, moveY, moveMode: 'walk' });
+    expect(command).toMatchObject({ ...FORWARD, moveMode: 'walk' });
+    expect(command.aimAngle).toBeCloseTo(aimAngle, 9);
   });
 
-  it('mira na direção do movimento', () => {
-    const command = decide({ x: 100, y: 100 }, [{ x: 300, y: 300 }], createBotMemory());
-    expect(command.aimAngle).toBeCloseTo(Math.PI / 4, 9);
+  it('mira na reta exata até o waypoint, sem arredondar para as 8 direções do teclado', () => {
+    const from = { x: 100, y: 100 };
+    const to = { x: 200, y: 160 };
+    expectHeadingTo(decide(from, [to], createBotMemory()), from, to);
   });
 
-  it('escolhe a direção do teclado mais perto da reta até o alvo', () => {
-    expect(directionTowards(100, 10)).toEqual([1, 0]);
-    expect(directionTowards(100, 60)).toEqual([1, 1]);
-    expect(directionTowards(-5, -100)).toEqual([0, -1]);
+  it('o movimento resultante vai na direção do waypoint', () => {
+    const from = { x: 100, y: 100 };
+    const command = decide(from, [{ x: 400, y: 250 }], createBotMemory());
+    const state = createPlayerState({ playerId: 'bot:1', team: 0, ...from });
+    const open: CollisionMap = {
+      cellSize: SIM_CONFIG.cellSize,
+      width: 100,
+      height: 100,
+      isSolid: () => false,
+    };
+    const next = stepPlayer(open, state, command, TICK_SECONDS);
+    expect(Math.atan2(next.y - from.y, next.x - from.x)).toBeCloseTo(Math.atan2(150, 300), 9);
   });
 
   it('começa pelo waypoint mais perto', () => {
     const memory = createBotMemory();
-    const command = decide({ x: 390, y: 380 }, SQUARE, memory);
+    const from = { x: 390, y: 380 };
+    const command = decide(from, SQUARE, memory);
     expect(memory.waypointIndex).toBe(2);
-    expect(command).toMatchObject({ moveX: 1, moveY: 1 });
+    expectHeadingTo(command, from, { x: 400, y: 400 });
   });
 
   it('devolve uma intenção sem seq: quem numera é o servidor', () => {
@@ -85,7 +104,7 @@ describe('bot nível 0: avança ao chegar', () => {
 
     const next = decide(atFirst, SQUARE, memory);
     expect(memory.waypointIndex).toBe(1);
-    expect(next).toMatchObject({ moveX: 1, moveY: 0 });
+    expectHeadingTo(next, atFirst, { x: 400, y: 100 });
   });
 
   it('parado, mantém a mira do último movimento', () => {
@@ -124,7 +143,7 @@ describe('bot nível 0: pula waypoint quando preso', () => {
     }
     const after = decide(stuck, SQUARE, memory);
     expect(memory.waypointIndex).toBe(2);
-    expect(after).toMatchObject({ moveX: 1, moveY: 1 });
+    expectHeadingTo(after, stuck, { x: 400, y: 400 });
   });
 
   it('chegando mais perto, não desiste', () => {

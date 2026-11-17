@@ -143,6 +143,8 @@ Na 1.0 só existe o **Recruta**, um operador genérico com acesso a todo o catá
 | **Loadout** | 1 primária + 1 secundária, escolhidas separadamente para ataque e defesa |
 | **Gadgets** | Fixos por lado na 1.0 (seção 6) |
 
+**Câmera e controles.** A câmera segue o próprio jogador e gira o mapa com a mira, que fica sempre apontando para cima na tela. O clique no jogo trava o mouse (pointer lock) e o movimento horizontal dele gira a mira; Esc solta o mouse. O WASD é relativo à mira: W anda para onde o jogador mira, S para trás, A e D de lado. A simulação aplica essa regra, então servidor, previsão do cliente, bots e cliente headless andam do mesmo jeito.
+
 ### 4.1 Tiro
 
 - **Hitscan**: o tiro é um raio instantâneo calculado no servidor.

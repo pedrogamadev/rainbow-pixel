@@ -66,14 +66,16 @@ function run(
   let shots = 0;
   let hits = 0;
   let kills = 0;
+  const angles: number[] = [];
   for (const inputs of sequence) {
     const result = stepWorld(world, inputs, { seed });
     world = result.world;
     shots += result.shots.length;
     hits += result.shots.filter((shot) => shot.hit !== null).length;
     kills += result.shots.filter((shot) => shot.hit?.killed === true).length;
+    angles.push(...result.shots.map((shot) => shot.angle));
   }
-  return { world, shots, hits, kills };
+  return { world, shots, hits, kills, angles };
 }
 
 afterEach(() => {
@@ -96,7 +98,9 @@ describe('determinismo', () => {
     const sequence = inputSequence(5);
     const first = run(sequence, 1);
     const second = run(sequence, 2);
-    expect(second.world.players).not.toEqual(first.world.players);
+    expect(second.shots).toBe(first.shots);
+    expect(first.shots).toBeGreaterThan(0);
+    expect(second.angles).not.toEqual(first.angles);
   });
 
   it('não usa Math.random nem relógio', () => {

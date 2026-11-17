@@ -43,9 +43,10 @@ class FakeTransport implements GameTransport {
   }
 }
 
+/** W mirando para o leste: anda para a direita. */
 const WALK_RIGHT: PlayerInput = {
-  moveX: 1,
-  moveY: 0,
+  moveX: 0,
+  moveY: -1,
   aimAngle: 0,
   moveMode: 'walk',
   fire: false,
@@ -273,7 +274,7 @@ describe('GameClient', () => {
     test.transport.emit(ServerMessageType.Snapshot, snapshot(10_050, 0, [{ x: 700, y: 500 }]));
     const shots: (string | null)[] = [];
     test.client.onLocalShot((shot) => shots.push(shot.localTargetId));
-    const fire: PlayerInput = { ...WALK_RIGHT, moveX: 0, fire: true };
+    const fire: PlayerInput = { ...WALK_RIGHT, moveY: 0, fire: true };
     test.client.update(() => fire);
     test.advance(TICK_MS);
     test.client.update(() => fire);
@@ -314,9 +315,9 @@ describe('GameClient', () => {
     test.transport.emit(ServerMessageType.Snapshot, snapshot(10_000, 0, [{ x: 700, y: 100 }]));
     const shots: (string | null)[] = [];
     test.client.onLocalShot((shot) => shots.push(shot.localTargetId));
-    test.client.update(() => ({ ...WALK_RIGHT, moveX: 0, fire: true }));
+    test.client.update(() => ({ ...WALK_RIGHT, moveY: 0, fire: true }));
     test.advance(TICK_MS);
-    test.client.update(() => ({ ...WALK_RIGHT, moveX: 0, fire: true }));
+    test.client.update(() => ({ ...WALK_RIGHT, moveY: 0, fire: true }));
     expect(shots).toEqual([null]);
     expect(test.client.shotStats()).toMatchObject({
       shotsFired: 1,

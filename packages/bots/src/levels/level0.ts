@@ -4,7 +4,7 @@
 // A dificuldade não muda nada neste nível.
 
 import { BOT_LEVEL0_CONFIG, BOT_LEVEL1_CONFIG } from '@rainbow-pixel/shared';
-import type { MoveAxis, Vec2 } from '@rainbow-pixel/shared';
+import type { Vec2 } from '@rainbow-pixel/shared';
 import type { BotBrain, BotIntent } from '../BotBrain.js';
 import type { PlayerView } from '../PlayerView.js';
 import type { BotMemory } from '../memory.js';
@@ -16,23 +16,8 @@ export const HOLD_FIRE = {
   weaponSlot: BOT_LEVEL1_CONFIG.weaponSlot,
 } as const;
 
-/** As 8 direções do teclado, a partir do leste, no sentido horário (y cresce para baixo). */
-const DIRECTIONS: readonly (readonly [MoveAxis, MoveAxis])[] = [
-  [1, 0],
-  [1, 1],
-  [0, 1],
-  [-1, 1],
-  [-1, 0],
-  [-1, -1],
-  [0, -1],
-  [1, -1],
-];
-
-/** Direção do teclado mais próxima da reta até o alvo. */
-export function directionTowards(dx: number, dy: number): readonly [MoveAxis, MoveAxis] {
-  const octant = Math.round(Math.atan2(dy, dx) / (Math.PI / 4));
-  return DIRECTIONS[(octant + DIRECTIONS.length) % DIRECTIONS.length] ?? [0, 0];
-}
+/** Só para frente (W): o movimento é relativo à mira, então andar é mirar no destino. */
+const FORWARD = { moveX: 0, moveY: -1 } as const;
 
 function distance(a: Vec2, b: Vec2): number {
   return Math.hypot(b.x - a.x, b.y - a.y);
@@ -110,10 +95,9 @@ function decide(view: PlayerView, memory: BotMemory, dtMs: number): BotIntent {
     }
   }
 
-  const [moveX, moveY] = directionTowards(target.x - self.x, target.y - self.y);
-  const aimAngle = Math.atan2(moveY, moveX);
+  const aimAngle = Math.atan2(target.y - self.y, target.x - self.x);
   memory.aimAngle = aimAngle;
-  return { moveX, moveY, aimAngle, moveMode: 'walk', ...HOLD_FIRE };
+  return { ...FORWARD, aimAngle, moveMode: 'walk', ...HOLD_FIRE };
 }
 
 export const level0Brain: BotBrain = { level: 0, decide };

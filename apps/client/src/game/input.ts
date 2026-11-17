@@ -1,8 +1,12 @@
-// Teclado e mouse -> input do próximo tick: WASD move, Shift anda lento, Ctrl corre, o mouse
-// define a mira em relação ao jogador, o botão esquerdo atira (segurar para a automática),
-// R recarrega e 1 e 2 trocam entre a primária e a secundária.
+// Teclado e mouse -> input do próximo tick. A câmera gira com a mira, que fica sempre para cima
+// na tela: o clique no jogo trava o mouse (pointer lock) e o movimento horizontal gira a mira.
+// WASD anda relativo à mira (W para frente, S para trás, A e D de lado), Shift anda lento, Ctrl
+// corre, o botão esquerdo atira (segurar para a automática), R recarrega e 1 e 2 trocam entre a
+// primária e a secundária. Esc solta o mouse (o navegador faz isso sozinho).
 
-import type { MoveAxis, MoveMode, PlayerInput, WeaponSlot } from '@rainbow-pixel/shared';
+import { AIM_NORTH } from '@rainbow-pixel/shared';
+import type { MoveAxis, MoveMode, PlayerInput, Vec2, WeaponSlot } from '@rainbow-pixel/shared';
+import { turnAim } from './camera';
 
 /** Teclas com Ctrl que o navegador usaria para outra coisa (salvar, favoritos, selecionar). */
 const BLOCKED_WITH_CTRL = new Set(['KeyW', 'KeyA', 'KeyS', 'KeyD']);
@@ -21,10 +25,16 @@ function axis(negative: boolean, positive: boolean): MoveAxis {
   return positive === negative ? 0 : positive ? 1 : -1;
 }
 
+export type AimLockListener = (locked: boolean) => void;
+
 export class KeyboardMouseInput {
   private readonly pressed = new Set<string>();
-  private pointer: { x: number; y: number } | null = null;
-  private aimAngle = 0;
+  private readonly lockListeners = new Set<AimLockListener>();
+  /** Posição do mouse solto, relativa ao canvas. `null` com o mouse travado. */
+  private pointer: Vec2 | null = null;
+  /** Começa para o norte: no início da partida o mapa aparece como foi desenhado. */
+  private aimAngle = AIM_NORTH;
+  private locked = false;
   private firing = false;
   private weaponSlot: WeaponSlot = 'primary';
 
@@ -50,23 +60,46 @@ export class KeyboardMouseInput {
     this.firing = false;
   };
 
-  private readonly onPointerMove = (event: PointerEvent) => {
+  private readonly onMouseMove = (event: MouseEvent) => {
+    if (this.locked) {
+      this.aimAngle = turnAim(this.aimAngle, event.movementX);
+      return;
+    }
     const bounds = this.surface.getBoundingClientRect();
     this.pointer = { x: event.clientX - bounds.left, y: event.clientY - bounds.top };
   };
 
-  private readonly onPointerDown = (event: PointerEvent) => {
-    if (event.button === PRIMARY_BUTTON) {
+  private readonly onMouseDown = (event: MouseEvent) => {
+    if (event.button !== PRIMARY_BUTTON) {
+      return;
+    }
+    event.preventDefault();
+    if (this.locked) {
       this.firing = true;
-      // Mantém o botão com o canvas mesmo se o mouse sair dele segurando o tiro.
-      this.surface.setPointerCapture(event.pointerId);
-      event.preventDefault();
+    } else {
+      // O clique que trava o mouse não atira.
+      this.requestLock();
     }
   };
 
-  private readonly onPointerUp = (event: PointerEvent) => {
+  private readonly onMouseUp = (event: MouseEvent) => {
     if (event.button === PRIMARY_BUTTON) {
       this.firing = false;
+    }
+  };
+
+  private readonly onPointerLockChange = () => {
+    const locked = document.pointerLockElement === this.surface;
+    if (locked === this.locked) {
+      return;
+    }
+    this.locked = locked;
+    this.firing = false;
+    if (locked) {
+      this.pointer = null;
+    }
+    for (const listener of this.lockListeners) {
+      listener(locked);
     }
   };
 
@@ -79,34 +112,55 @@ export class KeyboardMouseInput {
     window.addEventListener('keydown', this.onKeyDown);
     window.addEventListener('keyup', this.onKeyUp);
     window.addEventListener('blur', this.onBlur);
-    surface.addEventListener('pointermove', this.onPointerMove);
-    surface.addEventListener('pointerdown', this.onPointerDown);
-    surface.addEventListener('pointerup', this.onPointerUp);
-    surface.addEventListener('pointercancel', this.onPointerUp);
+    document.addEventListener('pointerlockchange', this.onPointerLockChange);
+    // Com o mouse travado, os eventos de mouse vão todos para o elemento travado.
+    surface.addEventListener('mousemove', this.onMouseMove);
+    surface.addEventListener('mousedown', this.onMouseDown);
+    surface.addEventListener('mouseup', this.onMouseUp);
     surface.addEventListener('contextmenu', this.onContextMenu);
+  }
+
+  private requestLock(): void {
+    try {
+      // Navegadores antigos devolvem undefined em vez da Promise.
+      const pending = this.surface.requestPointerLock() as Promise<void> | undefined;
+      pending?.catch(() => {
+        // Recusado (por exemplo, logo depois do Esc): o próximo clique tenta de novo.
+      });
+    } catch {
+      // Idem, nos navegadores que lançam em vez de rejeitar.
+    }
   }
 
   private isDown(...codes: string[]): boolean {
     return codes.some((code) => this.pressed.has(code));
   }
 
-  /** Posição do mouse na tela (relativa ao canvas). `null` antes de o mouse passar por ele. */
-  pointerPosition(): { readonly x: number; readonly y: number } | null {
+  /** O mouse está travado no jogo, girando a mira. */
+  isAimLocked(): boolean {
+    return this.locked;
+  }
+
+  /** Avisa quando o mouse trava ou solta. Devolve a função que cancela. */
+  onAimLockChange(listener: AimLockListener): () => void {
+    this.lockListeners.add(listener);
+    return () => {
+      this.lockListeners.delete(listener);
+    };
+  }
+
+  /** Posição do mouse solto na tela (relativa ao canvas). `null` com o mouse travado. */
+  pointerPosition(): Vec2 | null {
     return this.pointer;
   }
 
-  /**
-   * Input do tick. `selfOnScreen` é onde o próprio jogador está na tela; a mira aponta dele
-   * para o mouse. Sem mouse na tela, a mira fica como estava.
-   */
-  sample(selfOnScreen: { x: number; y: number } | null): PlayerInput {
-    if (this.pointer !== null && selfOnScreen !== null) {
-      const dx = this.pointer.x - selfOnScreen.x;
-      const dy = this.pointer.y - selfOnScreen.y;
-      if (dx !== 0 || dy !== 0) {
-        this.aimAngle = Math.atan2(dy, dx);
-      }
-    }
+  /** Mira atual do mouse, a cada quadro (a câmera gira com ela sem esperar o tick). */
+  currentAim(): number {
+    return this.aimAngle;
+  }
+
+  /** Input do tick. Com o mouse solto, a mira fica como estava. */
+  sample(): PlayerInput {
     // Com Shift e Ctrl juntos, vale o andar lento.
     let moveMode: MoveMode = 'walk';
     if (this.isDown('ShiftLeft', 'ShiftRight')) moveMode = 'slow';
@@ -126,11 +180,15 @@ export class KeyboardMouseInput {
     window.removeEventListener('keydown', this.onKeyDown);
     window.removeEventListener('keyup', this.onKeyUp);
     window.removeEventListener('blur', this.onBlur);
-    this.surface.removeEventListener('pointermove', this.onPointerMove);
-    this.surface.removeEventListener('pointerdown', this.onPointerDown);
-    this.surface.removeEventListener('pointerup', this.onPointerUp);
-    this.surface.removeEventListener('pointercancel', this.onPointerUp);
+    document.removeEventListener('pointerlockchange', this.onPointerLockChange);
+    this.surface.removeEventListener('mousemove', this.onMouseMove);
+    this.surface.removeEventListener('mousedown', this.onMouseDown);
+    this.surface.removeEventListener('mouseup', this.onMouseUp);
     this.surface.removeEventListener('contextmenu', this.onContextMenu);
+    if (this.locked) {
+      document.exitPointerLock();
+    }
+    this.lockListeners.clear();
     this.pressed.clear();
     this.firing = false;
   }

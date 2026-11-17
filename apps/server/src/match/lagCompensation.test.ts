@@ -98,6 +98,9 @@ const STAND: PlayerInput = {
   weaponSlot: 'primary',
 };
 
+/** Mira para baixo e anda para frente (W): 140 px/s para baixo. */
+const WALK_DOWN: PlayerInput = { ...STAND, aimAngle: Math.PI / 2, moveY: -1 };
+
 interface Scenario {
   readonly world: SimWorld;
   readonly history: PositionHistory;
@@ -116,7 +119,7 @@ function movingTarget(rewindMs: number): Scenario {
     createPlayerState({ playerId: 'alvo', team: 1, x: 800, y: 900 }),
   ]);
   let history: PositionHistory = [];
-  const walkDown: WorldInput = { input: { ...STAND, moveY: 1 } };
+  const walkDown: WorldInput = { input: WALK_DOWN };
   for (let tick = 1; tick <= 30; tick += 1) {
     world = stepWorld(world, new Map([['alvo', walkDown]])).world;
     history = recordFrame(history, {
@@ -140,7 +143,7 @@ function shootAtSeen(scenario: Scenario, viewTimeMs: number, maxRewindMs: number
   const aimAngle = Math.atan2(scenario.seen.y - (atirador?.y ?? 0), scenario.seen.x - 500);
   const inputs = new Map<string, WorldInput>([
     ['atirador', { input: { ...STAND, aimAngle, fire: true } }],
-    ['alvo', { input: { ...STAND, moveY: 1 } }],
+    ['alvo', { input: WALK_DOWN }],
   ]);
   const receivedAtMs = scenario.tickTimeMs;
   return stepWorld(scenario.world, inputs, {

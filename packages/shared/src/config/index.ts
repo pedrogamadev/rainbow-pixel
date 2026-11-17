@@ -193,6 +193,15 @@ export const HUD_CONFIG = {
   killFeedMs: 5000,
 } as const;
 
+/**
+ * Câmera da partida no cliente: segue o próprio jogador e gira com a mira, que fica sempre para
+ * cima na tela. O mouse fica travado no jogo (pointer lock) e o movimento horizontal gira a mira.
+ */
+export const CAMERA_CONFIG = {
+  /** Giro da mira por px de movimento horizontal do mouse. 0,15°/px: uma volta em 2400 px. */
+  mouseTurnDegPerPx: 0.15,
+} as const;
+
 /** Bot nível 0: patrulha de waypoints (escopo, seção 16.3). */
 export const BOT_LEVEL0_CONFIG = {
   /** Decisões por segundo. Nos ticks intermediários vale o último input. */
