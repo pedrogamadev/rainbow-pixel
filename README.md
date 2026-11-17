@@ -103,6 +103,8 @@ pnpm dev
 - Cliente: http://localhost:5173
 - Servidor (API REST e WebSocket): http://localhost:2567
 
+O servidor recarrega com o `node --watch` do próprio Node, com o tsx só como carregador de TypeScript. Não troque por `tsx watch`: no Windows, dentro do `pnpm dev`, o `tsx watch` fica lendo o stdin que o processo do servidor herda, e o servidor trava em silêncio, sem erro, ao importar o client gerado do Prisma.
+
 Crie uma conta, escolha um nickname e use "Criar sala" ou "Entrar com código".
 
 ### 6. Partida

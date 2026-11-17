@@ -5,7 +5,7 @@
   "description": "Servidor de jogo (Colyseus) e API REST (Express).",
   "type": "module",
   "scripts": {
-    "dev": "tsx watch --conditions=development src/index.ts",
+    "dev": "node --watch --watch-preserve-output --conditions=development --import tsx src/index.ts",
     "build": "prisma generate && tsc -p tsconfig.build.json",
     "start": "node dist/index.js",
     "typecheck": "tsc --noEmit",
